@@ -46,6 +46,11 @@ class ApiTests(unittest.TestCase):
         listed = self.client.get(f"/workspaces/{workspace_id}/agents").json()
         self.assertEqual(next(item for item in listed if item["id"] == agent["id"])["basePosition"], {"x": 9, "y": 7})
 
+    def test_rejects_two_agents_in_the_same_cell(self) -> None:
+        workspace_id = self.workspace["id"]
+        agents = self.client.get(f"/workspaces/{workspace_id}/agents").json()
+        self.assertEqual(self.client.patch(f"/agents/{agents[1]['id']}/position", json=agents[0]["position"]).status_code, 409)
+
     def test_persists_interaction_and_emits_requested_event(self) -> None:
         workspace_id = self.workspace["id"]
         agents = self.client.get(f"/workspaces/{workspace_id}/agents").json()
@@ -76,6 +81,8 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(len(approvals), 1)
         decision = self.client.post(f"/approvals/{approvals[0]['id']}/decision", json={"approved": False})
         self.assertEqual(decision.json()["state"], "rejected")
+        history = self.client.get(f"/agents/{agent['id']}/tasks").json()
+        self.assertEqual(history[0]["state"], "cancelled")
 
 
 if __name__ == "__main__":

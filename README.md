@@ -21,6 +21,13 @@ npm run dev
 
 Abra `http://127.0.0.1:5173`.
 
+Para a aplicação desktop, gere o frontend e execute:
+
+```bash
+cd frontend && npm run build
+cd ../electron && npm install && npm start
+```
+
 ## Verificação
 
 ```bash
@@ -41,4 +48,4 @@ O último comando usa o Codex local em modo efêmero e somente leitura.
 - Interação persistida entre agentes, com eventos sequenciais, A*, balão resumido e retorno visual à estação.
 - Catálogo/associação de plugins e aprovações explícitas antes de tarefas com escrita.
 
-O empacotamento Electron permanece após o MVP web estar estável.
+Electron inicia e encerra o backend local automaticamente. Empacotamento distribuível fica para a fase de release.

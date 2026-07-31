@@ -1,0 +1,16 @@
+{
+  "name": "agents-room-desktop",
+  "private": true,
+  "version": "0.1.0",
+  "main": "main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test test/*.test.cjs"
+  },
+  "devDependencies": {
+    "electron": "^39.2.7"
+  },
+  "allowScripts": {
+    "electron@39.8.10": true
+  }
+}

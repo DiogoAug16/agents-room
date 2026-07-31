@@ -7,6 +7,7 @@ type ApiAgent = { id: string; name: string; role: string; description: string; v
 export type Workspace = { id: string; name: string; room: { width: number; height: number }; projectRoot: string };
 export type Plugin = { id: string; name: string; description: string; manifest: { permissions?: string[] } };
 export type Approval = { id: string; taskId: string; kind: string; summary: string };
+export type Task = { id: string; prompt: string; state: string; accessMode: string; result?: string; createdAt: string; finishedAt?: string };
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${baseUrl}${path}`, { headers: { "content-type": "application/json", ...(init?.headers ?? {}) }, ...init });
@@ -26,6 +27,8 @@ export const api = {
   assignSkill: (agentId: string, skillId: string) => request(`/agents/${agentId}/skills`, { method: "POST", body: JSON.stringify({ skill_id: skillId }) }),
   assignPlugin: (agentId: string, pluginId: string) => request(`/agents/${agentId}/plugins`, { method: "POST", body: JSON.stringify({ plugin_id: pluginId }) }),
   createTask: (agentId: string, prompt: string, accessMode = "read_only") => request<{ id: string; state: string }>(`/agents/${agentId}/tasks`, { method: "POST", body: JSON.stringify({ prompt, access_mode: accessMode }) }),
+  tasks: (agentId: string) => request<Task[]>(`/agents/${agentId}/tasks`),
+  cancelTask: (taskId: string) => request<{ id: string; state: string }>(`/tasks/${taskId}/cancel`, { method: "POST" }),
   approvals: (workspaceId: string) => request<Approval[]>(`/workspaces/${workspaceId}/approvals`),
   decideApproval: (approvalId: string, approved: boolean) => request(`/approvals/${approvalId}/decision`, { method: "POST", body: JSON.stringify({ approved }) }),
   createInteraction: (agentId: string, targetAgentId: string, summary: string) => request<{ id: string; state: string }>(`/agents/${agentId}/interactions`, { method: "POST", body: JSON.stringify({ target_agent_id: targetAgentId, summary, kind: "context_share" }) }),

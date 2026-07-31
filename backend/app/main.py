@@ -30,6 +30,10 @@ def agent_payload(agent: Agent) -> dict:
     return {"id": agent.id, "name": agent.name, "role": agent.role, "description": agent.description, "appearance": agent.appearance, "visualStatus": agent.visual_status, "position": {"x": agent.current_x, "y": agent.current_y}, "basePosition": {"x": agent.base_x, "y": agent.base_y}, "direction": agent.direction, "permission": agent.permission, "skills": [{"id": link.skill.id, "name": link.skill.name, "enabled": link.enabled} for link in agent.skills], "plugins": [{"id": link.plugin.id, "name": link.plugin.name, "enabled": link.enabled} for link in agent.plugins]}
 
 
+def task_payload(task: Task) -> dict:
+    return {"id": task.id, "prompt": task.prompt, "state": task.state, "accessMode": task.access_mode, "result": task.result, "createdAt": task.created_at.isoformat(), "finishedAt": task.finished_at.isoformat() if task.finished_at else None}
+
+
 def seed(session: Session) -> Workspace:
     workspace = session.scalar(select(Workspace).limit(1))
     if workspace:
@@ -105,6 +109,9 @@ async def update_position(agent_id: str, body: PositionUpdate, session: Session 
     agent = session.get(Agent, agent_id)
     if not agent:
         raise HTTPException(404, "Agent not found")
+    occupied = session.scalar(select(Agent).where(Agent.workspace_id == agent.workspace_id, Agent.current_x == body.x, Agent.current_y == body.y, Agent.id != agent.id))
+    if occupied:
+        raise HTTPException(409, "A cell cannot be occupied by two agents")
     agent.current_x = agent.base_x = body.x; agent.current_y = agent.base_y = body.y
     if agent.workstation: agent.workstation.x = body.x; agent.workstation.y = body.y
     session.commit()
@@ -201,6 +208,12 @@ async def create_task(agent_id: str, body: TaskCreate, session: Session = Depend
     if approval: await emit(session, agent.workspace_id, "task.approval.requested", source_agent_id=agent.id, task_id=task.id, payload={"approvalId": approval.id, "summary": approval.summary})
     else: asyncio.create_task(execute_task(task.id))
     return {"id": task.id, "state": task.state}
+
+
+@app.get("/agents/{agent_id}/tasks")
+def list_tasks(agent_id: str, session: Session = Depends(get_session)) -> list[dict]:
+    if not session.get(Agent, agent_id): raise HTTPException(404, "Agent not found")
+    return [task_payload(task) for task in session.scalars(select(Task).where(Task.agent_id == agent_id).order_by(Task.created_at.desc()).limit(12)).all()]
 
 
 @app.get("/workspaces/{workspace_id}/approvals")
