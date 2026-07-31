@@ -13,6 +13,7 @@ export type Agent = {
   position: GridPoint;
   basePosition: GridPoint;
   skills: string[];
+  skillStates: { id: string; enabled: boolean }[];
   task?: string;
 };
 

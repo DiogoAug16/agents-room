@@ -78,7 +78,15 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(self.client.post(f"/agents/{agent['id']}/skills", json={"skill_id": "testing"}).status_code, 201)
         self.assertEqual(self.client.delete(f"/agents/{agent['id']}/skills/testing").status_code, 204)
         refreshed = self.client.get(f"/workspaces/{workspace_id}/agents").json()[0]
-        self.assertEqual(refreshed["skills"], [])
+        self.assertNotIn("testing", [skill["id"] for skill in refreshed["skills"]])
+
+    def test_disables_an_assigned_skill(self) -> None:
+        workspace_id = self.workspace["id"]
+        agent = self.client.get(f"/workspaces/{workspace_id}/agents").json()[0]
+        self.assertEqual(self.client.post(f"/agents/{agent['id']}/skills", json={"skill_id": "ui"}).status_code, 201)
+        self.assertEqual(self.client.patch(f"/agents/{agent['id']}/skills/ui", json={"enabled": False}).json(), {"skillId": "ui", "enabled": False})
+        refreshed = self.client.get(f"/workspaces/{workspace_id}/agents").json()[0]
+        self.assertEqual(refreshed["skills"], [{"id": "ui", "name": "Interface", "enabled": False}])
 
     def test_workspace_write_requires_and_records_rejection(self) -> None:
         workspace_id = self.workspace["id"]

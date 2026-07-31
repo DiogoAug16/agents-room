@@ -24,6 +24,10 @@ class SkillAssignment(BaseModel):
     skill_id: str
 
 
+class SkillEnabledUpdate(BaseModel):
+    enabled: bool
+
+
 class PluginAssignment(BaseModel):
     plugin_id: str
 

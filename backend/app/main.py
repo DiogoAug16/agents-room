@@ -13,7 +13,7 @@ from .codex_provider import CodexAgentProvider
 from .database import Base, SessionLocal, engine, get_session
 from .events import emit, manager, replay
 from .models import Agent, AgentInteraction, AgentPlugin, AgentSkill, Approval, Plugin, Skill, Task, Workspace, Workstation, now
-from .schemas import AgentCreate, ApprovalDecision, InteractionCreate, PluginAssignment, PositionUpdate, SkillAssignment, TaskCreate
+from .schemas import AgentCreate, ApprovalDecision, InteractionCreate, PluginAssignment, PositionUpdate, SkillAssignment, SkillEnabledUpdate, TaskCreate
 from .workspace_metadata import current_git_branch
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -155,6 +155,18 @@ async def remove_skill(agent_id: str, skill_id: str, session: Session = Depends(
         raise HTTPException(404, "Agent skill not found")
     session.delete(link); session.commit()
     await emit(session, agent.workspace_id, "skill.removed", source_agent_id=agent_id, payload={"skillId": skill_id})
+
+
+@app.patch("/agents/{agent_id}/skills/{skill_id}")
+async def update_skill(agent_id: str, skill_id: str, body: SkillEnabledUpdate, session: Session = Depends(get_session)) -> dict:
+    agent = session.get(Agent, agent_id)
+    link = session.scalar(select(AgentSkill).where(AgentSkill.agent_id == agent_id, AgentSkill.skill_id == skill_id))
+    if not agent or not link:
+        raise HTTPException(404, "Agent skill not found")
+    link.enabled = body.enabled; session.commit()
+    payload = {"skillId": skill_id, "enabled": link.enabled}
+    await emit(session, agent.workspace_id, "skill.updated", source_agent_id=agent_id, payload=payload)
+    return payload
 
 
 @app.get("/plugins")
