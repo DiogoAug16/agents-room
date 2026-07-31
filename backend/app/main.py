@@ -14,6 +14,7 @@ from .database import Base, SessionLocal, engine, get_session
 from .events import emit, manager, replay
 from .models import Agent, AgentInteraction, AgentPlugin, AgentSkill, Approval, Plugin, Skill, Task, Workspace, Workstation, now
 from .schemas import AgentCreate, ApprovalDecision, InteractionCreate, PluginAssignment, PositionUpdate, SkillAssignment, TaskCreate
+from .workspace_metadata import current_git_branch
 
 ROOT = Path(__file__).resolve().parents[2]
 ACTIVE_TASK_STATES = ("created", "queued", "starting", "running", "waiting_approval", "cancelling")
@@ -77,7 +78,7 @@ def health() -> dict:
 @app.get("/workspaces/default")
 def get_workspace(session: Session = Depends(get_session)) -> dict:
     workspace = seed(session)
-    return {"id": workspace.id, "name": workspace.name, "room": {"width": workspace.room_width, "height": workspace.room_height}, "projectRoot": workspace.project_root}
+    return {"id": workspace.id, "name": workspace.name, "room": {"width": workspace.room_width, "height": workspace.room_height}, "projectRoot": workspace.project_root, "gitBranch": current_git_branch(workspace.project_root)}
 
 
 @app.get("/workspaces/{workspace_id}/agents")
