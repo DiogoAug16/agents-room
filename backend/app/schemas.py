@@ -32,6 +32,10 @@ class PluginAssignment(BaseModel):
     plugin_id: str
 
 
+class PluginEnabledUpdate(BaseModel):
+    enabled: bool
+
+
 class TaskCreate(BaseModel):
     prompt: str = Field(min_length=1, max_length=20000)
     access_mode: Permission = "read_only"

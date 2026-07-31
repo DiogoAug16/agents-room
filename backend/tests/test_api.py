@@ -72,6 +72,22 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(self.client.post(f"/agents/{agent['id']}/plugins", json={"plugin_id": "codex-local"}).status_code, 201)
         self.assertEqual(self.client.post(f"/agents/{agent['id']}/plugins", json={"plugin_id": "codex-local"}).status_code, 409)
 
+    def test_disables_an_assigned_plugin(self) -> None:
+        workspace_id = self.workspace["id"]
+        agent = self.client.post(f"/workspaces/{workspace_id}/agents", json={"name": "Dora", "role": "Produto"}).json()
+        self.assertEqual(self.client.post(f"/agents/{agent['id']}/plugins", json={"plugin_id": "codex-local"}).status_code, 201)
+        self.assertEqual(self.client.patch(f"/agents/{agent['id']}/plugins/codex-local", json={"enabled": False}).json(), {"pluginId": "codex-local", "enabled": False})
+        refreshed = next(item for item in self.client.get(f"/workspaces/{workspace_id}/agents").json() if item["id"] == agent["id"])
+        self.assertEqual(refreshed["plugins"], [{"id": "codex-local", "name": "Codex Local", "enabled": False}])
+
+    def test_removes_an_assigned_plugin(self) -> None:
+        workspace_id = self.workspace["id"]
+        agent = self.client.post(f"/workspaces/{workspace_id}/agents", json={"name": "Davi", "role": "Produto"}).json()
+        self.assertEqual(self.client.post(f"/agents/{agent['id']}/plugins", json={"plugin_id": "codex-local"}).status_code, 201)
+        self.assertEqual(self.client.delete(f"/agents/{agent['id']}/plugins/codex-local").status_code, 204)
+        refreshed = next(item for item in self.client.get(f"/workspaces/{workspace_id}/agents").json() if item["id"] == agent["id"])
+        self.assertEqual(refreshed["plugins"], [])
+
     def test_removes_an_assigned_skill(self) -> None:
         workspace_id = self.workspace["id"]
         agent = self.client.get(f"/workspaces/{workspace_id}/agents").json()[0]

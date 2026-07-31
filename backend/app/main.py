@@ -13,7 +13,7 @@ from .codex_provider import CodexAgentProvider
 from .database import Base, SessionLocal, engine, get_session
 from .events import emit, manager, replay
 from .models import Agent, AgentInteraction, AgentPlugin, AgentSkill, Approval, Plugin, Skill, Task, Workspace, Workstation, now
-from .schemas import AgentCreate, ApprovalDecision, InteractionCreate, PluginAssignment, PositionUpdate, SkillAssignment, SkillEnabledUpdate, TaskCreate
+from .schemas import AgentCreate, ApprovalDecision, InteractionCreate, PluginAssignment, PluginEnabledUpdate, PositionUpdate, SkillAssignment, SkillEnabledUpdate, TaskCreate
 from .workspace_metadata import current_git_branch
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -182,6 +182,28 @@ async def assign_plugin(agent_id: str, body: PluginAssignment, session: Session 
     session.add(AgentPlugin(agent_id=agent_id, plugin_id=plugin.id)); session.commit()
     payload = {"pluginId": plugin.id, "name": plugin.name}
     await emit(session, agent.workspace_id, "plugin.assigned", source_agent_id=agent.id, payload=payload)
+    return payload
+
+
+@app.delete("/agents/{agent_id}/plugins/{plugin_id}", status_code=204)
+async def remove_plugin(agent_id: str, plugin_id: str, session: Session = Depends(get_session)) -> None:
+    agent = session.get(Agent, agent_id)
+    link = session.scalar(select(AgentPlugin).where(AgentPlugin.agent_id == agent_id, AgentPlugin.plugin_id == plugin_id))
+    if not agent or not link:
+        raise HTTPException(404, "Agent plugin not found")
+    session.delete(link); session.commit()
+    await emit(session, agent.workspace_id, "plugin.removed", source_agent_id=agent_id, payload={"pluginId": plugin_id})
+
+
+@app.patch("/agents/{agent_id}/plugins/{plugin_id}")
+async def update_plugin(agent_id: str, plugin_id: str, body: PluginEnabledUpdate, session: Session = Depends(get_session)) -> dict:
+    agent = session.get(Agent, agent_id)
+    link = session.scalar(select(AgentPlugin).where(AgentPlugin.agent_id == agent_id, AgentPlugin.plugin_id == plugin_id))
+    if not agent or not link:
+        raise HTTPException(404, "Agent plugin not found")
+    link.enabled = body.enabled; session.commit()
+    payload = {"pluginId": plugin_id, "enabled": link.enabled}
+    await emit(session, agent.workspace_id, "plugin.updated", source_agent_id=agent_id, payload=payload)
     return payload
 
 
