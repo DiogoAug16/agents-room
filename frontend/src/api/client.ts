@@ -25,6 +25,7 @@ export const api = {
   deleteAgent: (agentId: string) => request<void>(`/agents/${agentId}`, { method: "DELETE" }),
   moveAgent: (agentId: string, x: number, y: number) => request(`/agents/${agentId}/position`, { method: "PATCH", body: JSON.stringify({ x, y }) }),
   assignSkill: (agentId: string, skillId: string) => request(`/agents/${agentId}/skills`, { method: "POST", body: JSON.stringify({ skill_id: skillId }) }),
+  removeSkill: (agentId: string, skillId: string) => request<void>(`/agents/${agentId}/skills/${skillId}`, { method: "DELETE" }),
   assignPlugin: (agentId: string, pluginId: string) => request(`/agents/${agentId}/plugins`, { method: "POST", body: JSON.stringify({ plugin_id: pluginId }) }),
   createTask: (agentId: string, prompt: string, accessMode = "read_only") => request<{ id: string; state: string }>(`/agents/${agentId}/tasks`, { method: "POST", body: JSON.stringify({ prompt, access_mode: accessMode }) }),
   tasks: (agentId: string) => request<Task[]>(`/agents/${agentId}/tasks`),

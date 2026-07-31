@@ -147,6 +147,16 @@ async def assign_skill(agent_id: str, body: SkillAssignment, session: Session = 
     return payload
 
 
+@app.delete("/agents/{agent_id}/skills/{skill_id}", status_code=204)
+async def remove_skill(agent_id: str, skill_id: str, session: Session = Depends(get_session)) -> None:
+    agent = session.get(Agent, agent_id)
+    link = session.scalar(select(AgentSkill).where(AgentSkill.agent_id == agent_id, AgentSkill.skill_id == skill_id))
+    if not agent or not link:
+        raise HTTPException(404, "Agent skill not found")
+    session.delete(link); session.commit()
+    await emit(session, agent.workspace_id, "skill.removed", source_agent_id=agent_id, payload={"skillId": skill_id})
+
+
 @app.get("/plugins")
 def list_plugins(session: Session = Depends(get_session)) -> list[dict]:
     return [{"id": plugin.id, "name": plugin.name, "description": plugin.description, "manifest": plugin.manifest} for plugin in session.scalars(select(Plugin).order_by(Plugin.name)).all()]
