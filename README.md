@@ -28,6 +28,12 @@ cd frontend && npm run build
 cd ../electron && npm install && npm start
 ```
 
+Valide o ciclo desktop sem exibir janela:
+
+```bash
+cd electron && npm run smoke
+```
+
 ## Verificação
 
 ```bash

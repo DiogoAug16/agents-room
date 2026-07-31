@@ -5,6 +5,7 @@
   "main": "main.cjs",
   "scripts": {
     "start": "electron .",
+    "smoke": "ELECTRON_SMOKE=1 electron .",
     "test": "node --test test/*.test.cjs"
   },
   "devDependencies": {
