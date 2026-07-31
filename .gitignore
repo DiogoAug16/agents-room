@@ -1,0 +1,9 @@
+backend/.venv/
+*.db
+.DS_Store
+assets/
+__pycache__/
+*.pyc
+*.tsbuildinfo
+frontend/node_modules/
+frontend/dist/
