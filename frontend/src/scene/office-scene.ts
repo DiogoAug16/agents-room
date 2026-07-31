@@ -5,6 +5,7 @@ import { sceneEvents } from "./scene-events";
 import { useSceneStore } from "../stores/scene-store";
 import { cellKey, findPath } from "./pathfinding";
 import type { SceneInteraction } from "./scene-events";
+import { isCheckerboardPixel } from "./character-sheet";
 
 type DrawnAgent = { body: Phaser.GameObjects.Container; sprite: Phaser.GameObjects.Sprite; status: Phaser.GameObjects.Arc; data: Agent };
 
@@ -19,13 +20,15 @@ export class OfficeScene extends Phaser.Scene {
   constructor() { super("office"); }
 
   preload() {
-    this.load.image("office", "/cenario_completo.png");
-    [1, 2, 3].forEach((index) => this.load.spritesheet(`agent-${index}`, `/personagem_${index}_asset.png`, { frameWidth: 256, frameHeight: 256 }));
+    const assetPath = window.location.protocol === "file:" ? "./" : "/";
+    this.load.image("office", `${assetPath}cenario_completo.png`);
+    [1, 2, 3].forEach((index) => this.load.spritesheet(`agent-${index}`, `${assetPath}personagem_${index}_asset.png`, { frameWidth: 256, frameHeight: 256 }));
   }
 
   create() {
     const background = this.add.image(0, 0, "office").setOrigin(0).setScale(0.75).setDepth(-100);
     background.setInteractive();
+    this.cleanCharacterSheets();
     this.createCharacterAnimations();
     this.drawGrid();
     this.cameras.main.setBounds(-80, -80, background.displayWidth + 160, background.displayHeight + 160);
@@ -136,11 +139,27 @@ export class OfficeScene extends Phaser.Scene {
 
   private wait(milliseconds: number) { return new Promise<void>((resolve) => this.time.delayedCall(milliseconds, resolve)); }
 
-  private textureFor(agent: Agent) { return `agent-${([...this.agents.keys(), agent.id].indexOf(agent.id) % 3) + 1}`; }
+  private textureFor(agent: Agent) { return `agent-${([...this.agents.keys(), agent.id].indexOf(agent.id) % 3) + 1}-clean`; }
+
+  private cleanCharacterSheets() {
+    [1, 2, 3].forEach((index) => {
+      const source = this.textures.get(`agent-${index}`).getSourceImage() as CanvasImageSource;
+      const canvas = document.createElement("canvas"); canvas.width = 2048; canvas.height = 2048;
+      const context = canvas.getContext("2d")!;
+      context.drawImage(source, 0, 0);
+      const pixels = context.getImageData(0, 0, 2048, 2048);
+      for (let offset = 0; offset < pixels.data.length; offset += 4) {
+        const red = pixels.data[offset], green = pixels.data[offset + 1], blue = pixels.data[offset + 2];
+        if (isCheckerboardPixel(red, green, blue)) pixels.data[offset + 3] = 0;
+      }
+      context.putImageData(pixels, 0, 0);
+      this.textures.addSpriteSheet(`agent-${index}-clean`, canvas as unknown as HTMLImageElement, { frameWidth: 256, frameHeight: 256 });
+    });
+  }
 
   private createCharacterAnimations() {
     [1, 2, 3].forEach((index) => {
-      const texture = `agent-${index}`;
+      const texture = `agent-${index}-clean`;
       (["north", "south", "east", "west"] as const).forEach((direction, row) => this.anims.create({ key: `${texture}-walk-${direction}`, frames: this.anims.generateFrameNumbers(texture, { start: row * 8, end: row * 8 + 7 }), frameRate: 8, repeat: -1 }));
       this.anims.create({ key: `${texture}-typing-south`, frames: this.anims.generateFrameNumbers(texture, { start: 42, end: 47 }), frameRate: 5, repeat: -1 });
     });

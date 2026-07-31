@@ -1,5 +1,6 @@
 const { app, BrowserWindow, dialog } = require("electron");
 const http = require("node:http");
+const fs = require("node:fs/promises");
 const path = require("node:path");
 const { startBackend } = require("./backend-process.cjs");
 
@@ -26,7 +27,11 @@ async function createWindow() {
   try {
     await waitForBackend();
     const window = new BrowserWindow({ width: 1440, height: 960, minWidth: 1100, minHeight: 720, show: !smoke, backgroundColor: "#121a20", webPreferences: { contextIsolation: true, nodeIntegration: false } });
-    if (smoke) window.webContents.once("did-finish-load", () => { console.log("PASS: Electron loaded the local application."); app.quit(); });
+    if (smoke) window.webContents.once("did-finish-load", async () => {
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      if (process.env.ELECTRON_CAPTURE_PATH) await fs.writeFile(process.env.ELECTRON_CAPTURE_PATH, (await window.capturePage()).toPNG());
+      console.log("PASS: Electron loaded the local application."); app.quit();
+    });
     await window.loadFile(path.join(root, "frontend", "dist", "index.html"));
   } catch (error) {
     await dialog.showErrorBox("Agents Room", error.message);
