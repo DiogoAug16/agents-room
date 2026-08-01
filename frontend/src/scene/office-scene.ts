@@ -12,7 +12,7 @@ import { IdleBehaviorController, type IdleBehaviorType } from "./idle-behavior-c
 import { NavigationGrid } from "./maps/navigation-grid";
 import { homeSeatForAgent, IDLE_POINTS, isInsideEmptyRoomFloor, MEETING_AREAS, STATIC_SEATS, staticObstacleKeys, WORKSTATION_CELLS, WORKSTATIONS, type SeatAnchor } from "./maps/office-layout";
 import { SeatRegistry, sameGridPoint, seatApproachWorldPosition, seatedWorldPosition } from "./maps/seats";
-import { FURNITURE_ASSETS, defaultFurnitureOrientation, furnitureAsset, furnitureCells, furnitureImage, furnitureInteractionPoints, furnitureOrientations, furnitureOrigin, furnitureSeat, furnitureSeats, furnitureTextureKey, type AgentSeatAssignments, type FurnitureInstance } from "./furniture/catalog";
+import { FURNITURE_ASSETS, defaultFurnitureOrientation, furnitureAsset, furnitureCells, furnitureImage, furnitureInteractionPoints, furnitureOrientations, furnitureOrigin, furnitureSeat, furnitureSeats, furnitureTextureKey, type AgentSeatAssignments, type FurnitureInstance, type FurnitureOrientation } from "./furniture/catalog";
 
 type DrawnAgent = { body: Phaser.GameObjects.Container; station: Phaser.GameObjects.Container; sprite: Phaser.GameObjects.Sprite; status: Phaser.GameObjects.Arc; data: Agent; currentCell: Agent["position"]; seatId?: string; idleToken: number };
 type FurnitureLayers = { rear: Phaser.GameObjects.Sprite; front?: Phaser.GameObjects.Sprite };
@@ -29,6 +29,7 @@ export class OfficeScene extends Phaser.Scene {
   private stationDrag?: string;
   private furnitureDrag?: string;
   private placingFurnitureAssetId?: string;
+  private placingFurnitureOrientation?: FurnitureOrientation;
   private furnitureGhost?: Phaser.GameObjects.Sprite;
   private readonly furnitureSprites = new Map<string, FurnitureLayers>();
   private furnitureBlocks = new Map<string, string>();
@@ -85,7 +86,7 @@ export class OfficeScene extends Phaser.Scene {
     });
     sceneEvents.addEventListener("agents", this.sync as EventListener);
     sceneEvents.addEventListener("interaction", this.interact as EventListener);
-    this.sync(new CustomEvent("agents", { detail: { agents: useSceneStore.getState().agents, editMode: useSceneStore.getState().editMode, furniture: useSceneStore.getState().furniture, agentSeatAssignments: useSceneStore.getState().agentSeatAssignments, placingFurnitureAssetId: useSceneStore.getState().placingFurnitureAssetId } }));
+    this.sync(new CustomEvent("agents", { detail: { agents: useSceneStore.getState().agents, editMode: useSceneStore.getState().editMode, furniture: useSceneStore.getState().furniture, agentSeatAssignments: useSceneStore.getState().agentSeatAssignments, placingFurnitureAssetId: useSceneStore.getState().placingFurnitureAssetId, placingFurnitureOrientation: useSceneStore.getState().placingFurnitureOrientation } }));
     this.input.keyboard?.on("keydown-F", () => this.focusSelected());
     this.input.keyboard?.on("keydown-ESC", () => { if (this.placingFurnitureAssetId) window.dispatchEvent(new Event("furniture:cancel-placement")); else window.dispatchEvent(new Event("agent:deselect")); });
     if (import.meta.env.DEV) this.input.keyboard?.on("keydown-N", () => this.toggleNavigationDebug());
@@ -105,11 +106,13 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   private sync = (event: Event) => {
-    const { agents, editMode, furniture, agentSeatAssignments, placingFurnitureAssetId } = (event as CustomEvent<{ agents: Agent[]; editMode: boolean; furniture: FurnitureInstance[]; agentSeatAssignments: AgentSeatAssignments; placingFurnitureAssetId?: string }>).detail;
+    const { agents, editMode, furniture, agentSeatAssignments, placingFurnitureAssetId, placingFurnitureOrientation } = (event as CustomEvent<{ agents: Agent[]; editMode: boolean; furniture: FurnitureInstance[]; agentSeatAssignments: AgentSeatAssignments; placingFurnitureAssetId?: string; placingFurnitureOrientation?: FurnitureOrientation }>).detail;
     this.editMode = editMode;
     this.agentSeatAssignments = agentSeatAssignments;
     this.placingFurnitureAssetId = editMode ? placingFurnitureAssetId : undefined;
+    this.placingFurnitureOrientation = editMode ? placingFurnitureOrientation : undefined;
     if (!this.placingFurnitureAssetId) { this.furnitureGhost?.destroy(); this.furnitureGhost = undefined; this.stationPreview?.clear(); }
+    else this.previewNewFurniture(this.input.activePointer);
     this.gridGraphics?.setVisible(editMode);
     if (!editMode) { this.stationDrag = undefined; this.stationOrigin = undefined; this.stationPreview?.clear(); }
     if (editMode) this.idleController.cancelAll();
@@ -233,10 +236,11 @@ export class OfficeScene extends Phaser.Scene {
   private previewNewFurniture(pointer: Phaser.Input.Pointer) {
     const asset = this.placingFurnitureAssetId && furnitureAsset(this.placingFurnitureAssetId);
     if (!asset) return;
+    const orientation = this.placingFurnitureOrientation ?? defaultFurnitureOrientation(asset.id);
     const point = this.cameras.main.getWorldPoint(pointer.x, pointer.y); const cell = screenToGrid(point.x, point.y); const screen = gridToScreen(cell);
-    if (!this.furnitureGhost) this.furnitureGhost = this.add.sprite(screen.x, screen.y, furnitureTextureKey(asset, defaultFurnitureOrientation(asset.id))).setOrigin(furnitureOrigin(asset, defaultFurnitureOrientation(asset.id)).x, furnitureOrigin(asset, defaultFurnitureOrientation(asset.id)).y).setScale(asset.defaultScale ?? 0.75).setDepth(99_997);
+    if (!this.furnitureGhost) this.furnitureGhost = this.add.sprite(screen.x, screen.y, furnitureTextureKey(asset, orientation)).setOrigin(furnitureOrigin(asset, orientation).x, furnitureOrigin(asset, orientation).y).setScale(asset.defaultScale ?? 0.75).setDepth(99_997);
     const valid = this.isNewFurniturePlacementValid(asset.id, cell);
-    this.furnitureGhost.setPosition(screen.x, screen.y).setAlpha(valid ? 0.58 : 0.34).setTint(valid ? 0x9de2d2 : 0xffaaa4);
+    this.furnitureGhost.setTexture(furnitureTextureKey(asset, orientation)).setOrigin(furnitureOrigin(asset, orientation).x, furnitureOrigin(asset, orientation).y).setPosition(screen.x, screen.y).setAlpha(valid ? 0.58 : 0.34).setTint(valid ? 0x9de2d2 : 0xffaaa4);
     if (!this.stationPreview) this.stationPreview = this.add.graphics().setDepth(99_996);
     this.stationPreview.clear().fillStyle(valid ? 0x4cae9b : 0xd35c5c, 0.32);
     asset.footprint.forEach((offset) => { const tile = gridToScreen({ x: cell.x + offset.x, y: cell.y + offset.y }); this.stationPreview!.fillPoints([new Phaser.Geom.Point(tile.x, tile.y - TILE_HEIGHT / 2), new Phaser.Geom.Point(tile.x + TILE_WIDTH / 2, tile.y), new Phaser.Geom.Point(tile.x, tile.y + TILE_HEIGHT / 2), new Phaser.Geom.Point(tile.x - TILE_WIDTH / 2, tile.y)], true); });

@@ -25,6 +25,15 @@ describe("furniture editor history", () => {
     expect(useSceneStore.getState().placingFurnitureAssetId).toBe("chair.office.black.01");
   });
 
+  it("rotates a pending placement using only its supplied variants", () => {
+    const store = useSceneStore.getState();
+    store.startFurniturePlacement("chair.office.black.01");
+    store.rotateFurniturePlacement();
+    expect(useSceneStore.getState().placingFurnitureOrientation).toBe("south_east");
+    expect(store.placeFurniture({ x: 10, y: 20 })).toBe(true);
+    expect(useSceneStore.getState().furniture[0].orientation).toBe("south_east");
+  });
+
   it("keeps an explicit chair assignment independent from agent coordinates", () => {
     const store = useSceneStore.getState();
     store.assignAgentSeat("ana", "chair-ana");
