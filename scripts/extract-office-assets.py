@@ -12,6 +12,8 @@ import shutil
 import subprocess
 from pathlib import Path
 
+from generate_office_asset_calibrations import write_catalog
+
 
 ROOT = Path(__file__).resolve().parents[1]
 ASSETS = ROOT / "assets"
@@ -36,6 +38,7 @@ def run() -> None:
         outputs.append(str(output.relative_to(ASSETS)))
     preview = ASSETS / "office/generated/preview.png"
     subprocess.run([tool, *[str(ASSETS / path) for path in outputs], "-thumbnail", "160x160", "-background", "#20303a", "+append", str(preview)], check=True)
+    write_catalog(manifest)
     print(f"Extracted {len(outputs)} assets. Preview: {preview}")
 
 

@@ -7,6 +7,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from generate_office_asset_calibrations import write_catalog
+
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_MANIFEST = ROOT / "assets/office/manifests/office-assets.json"
@@ -87,7 +89,9 @@ def main() -> None:
     args = parser.parse_args()
     manifest = json.loads(args.manifest.read_text())
     calibration = json.loads(args.calibration.read_text())
-    args.manifest.write_text(json.dumps(apply_calibration(manifest, calibration), ensure_ascii=False, indent=2) + "\n")
+    updated = apply_calibration(manifest, calibration)
+    args.manifest.write_text(json.dumps(updated, ensure_ascii=False, indent=2) + "\n")
+    write_catalog(updated)
     print(f"Applied calibration to {args.manifest}")
 
 

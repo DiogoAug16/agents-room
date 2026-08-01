@@ -1,4 +1,4 @@
-import { furnitureImage, furnitureSeat, type FurnitureAsset, type FurnitureOrientation } from "../scene/furniture/catalog";
+import { furnitureImage, furnitureOrigin, furnitureSeat, type FurnitureAsset, type FurnitureOrientation } from "../scene/furniture/catalog";
 
 export type AssetEditorDocument = {
   assetId: string;
@@ -16,7 +16,7 @@ export function assetEditorDocument(asset: FurnitureAsset, orientation: Furnitur
     assetId: asset.id,
     orientation,
     image: furnitureImage(asset, orientation),
-    origin: { x: 0.5, y: 0.85 },
+    origin: { ...furnitureOrigin(asset, orientation) },
     footprint: asset.footprint.map((point) => ({ ...point })),
     seat: seat && { anchor: { ...seat.anchor }, approach: { ...seat.approach }, facing: seat.facing, offset: { ...seat.offset } },
     interactionPoints: (asset.interactionPoints ?? []).map((point) => ({ id: point.id, offset: { ...point.offset }, facing: point.facing, capacity: point.capacity, actionTypes: [...point.actionTypes] })),

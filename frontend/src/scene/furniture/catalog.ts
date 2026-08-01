@@ -1,4 +1,5 @@
 import type { Direction, GridPoint } from "../../types";
+import { GENERATED_FURNITURE_CALIBRATIONS } from "./generated-calibrations";
 
 export type FurnitureCategory = "chair" | "desk" | "monitor" | "sofa" | "plant" | "decoration" | "cabinet" | "shelf" | "whiteboard" | "equipment";
 export type FurnitureOrientation = "north_east" | "north_west" | "south_east" | "south_west";
@@ -7,9 +8,12 @@ export type AgentSeatAssignments = Record<string, string>;
 export type FurnitureGroup = { id: string; name: string; instanceIds: string[]; groupType: "workstation" };
 export type FurnitureInteractionPoint = { id: string; furnitureId: string; gridPosition: GridPoint; facing?: Direction; capacity: number; actionTypes: string[] };
 export type FurnitureSeat = { anchor: GridPoint; approach: GridPoint; facing: Direction; offset: GridPoint };
-export type FurnitureAsset = { id: string; name: string; category: FurnitureCategory; image: string; footprint: GridPoint[]; navigationPadding: number; orientations?: Partial<Record<FurnitureOrientation, string>>; seatByOrientation?: Partial<Record<FurnitureOrientation, FurnitureSeat>>; defaultScale?: number; surface?: { hostCategories: FurnitureCategory[]; offset: GridPoint }; seat?: FurnitureSeat; interactionPoints?: Array<{ id: string; offset: GridPoint; facing?: Direction; capacity: number; actionTypes: string[] }>; frontOcclusionStart?: number; };
+export type FurnitureAsset = { id: string; name: string; category: FurnitureCategory; image: string; footprint: GridPoint[]; navigationPadding: number; orientations?: Partial<Record<FurnitureOrientation, string>>; seatByOrientation?: Partial<Record<FurnitureOrientation, FurnitureSeat>>; originByOrientation?: Partial<Record<FurnitureOrientation, GridPoint>>; defaultScale?: number; surface?: { hostCategories: FurnitureCategory[]; offset: GridPoint }; seat?: FurnitureSeat; interactionPoints?: Array<{ id: string; offset: GridPoint; facing?: Direction; capacity: number; actionTypes: string[] }>; frontOcclusionStart?: number; };
 
-export const FURNITURE_ASSETS: FurnitureAsset[] = [
+type FurnitureCalibration = { originNormalized?: GridPoint; footprint?: GridPoint[]; seat?: FurnitureSeat; interactionPoints?: Array<{ id: string; offset: GridPoint; facing?: Direction; capacity: number; actionTypes: string[] }> };
+type FurnitureCalibrations = Partial<Record<string, Partial<Record<FurnitureOrientation, FurnitureCalibration>>>>;
+
+const BASE_FURNITURE_ASSETS: FurnitureAsset[] = [
   { id: "chair.office.black.01", name: "Cadeira executiva", category: "chair", image: "office/generated/chairs/chair-office-black-01.png", orientations: { north_east: "office/generated/chairs/chair-office-black-01.png", south_east: "office/generated/chairs/chair-office-black-se-01.png" }, footprint: [{ x: 0, y: 0 }], navigationPadding: 0, seat: { anchor: { x: 0, y: 0 }, approach: { x: 0, y: 1 }, facing: "north", offset: { x: 0, y: -4 } }, seatByOrientation: { south_east: { anchor: { x: 0, y: 0 }, approach: { x: -1, y: 0 }, facing: "east", offset: { x: -2, y: -3 } } }, frontOcclusionStart: 0.58 },
   { id: "desk.work.light.01", name: "Mesa de trabalho", category: "desk", image: "office/generated/desks/desk-work-light-01.png", orientations: { north_west: "office/generated/desks/desk-work-light-01.png", south_west: "office/generated/desks/desk-work-light-sw-01.png" }, footprint: [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 }], navigationPadding: 1 },
   { id: "monitor.black.01", name: "Monitor + teclado", category: "monitor", image: "office/generated/monitors/monitor-black-01.png", footprint: [], navigationPadding: 0, surface: { hostCategories: ["desk"], offset: { x: 8, y: -28 } } },
@@ -22,6 +26,23 @@ export const FURNITURE_ASSETS: FurnitureAsset[] = [
   { id: "water.dispenser.01", name: "Bebedouro", category: "equipment", image: "office/generated/equipment/water-dispenser-01.png", footprint: [{ x: 0, y: 0 }], navigationPadding: 1, interactionPoints: [{ id: "water", offset: { x: 0, y: 1 }, facing: "north", capacity: 1, actionTypes: ["idle", "get_water"] }] },
 ];
 
+const calibrations = GENERATED_FURNITURE_CALIBRATIONS as FurnitureCalibrations;
+const calibratedAsset = (asset: FurnitureAsset): FurnitureAsset => {
+  const byOrientation = calibrations[asset.id];
+  if (!byOrientation) return asset;
+  const defaultOrientation = (Object.keys(asset.orientations ?? {})[0] ?? "north_east") as FurnitureOrientation;
+  const defaultCalibration = byOrientation[defaultOrientation];
+  return {
+    ...asset,
+    footprint: defaultCalibration?.footprint ?? asset.footprint,
+    interactionPoints: defaultCalibration?.interactionPoints ?? asset.interactionPoints,
+    originByOrientation: { ...asset.originByOrientation, ...Object.fromEntries(Object.entries(byOrientation).flatMap(([orientation, value]) => value?.originNormalized ? [[orientation, value.originNormalized]] : [])) },
+    seatByOrientation: { ...asset.seatByOrientation, ...Object.fromEntries(Object.entries(byOrientation).flatMap(([orientation, value]) => value?.seat ? [[orientation, value.seat]] : [])) },
+  };
+};
+
+export const FURNITURE_ASSETS = BASE_FURNITURE_ASSETS.map(calibratedAsset);
+
 export const furnitureAsset = (id: string) => FURNITURE_ASSETS.find((asset) => asset.id === id);
 export const furnitureOrientations = (asset: FurnitureAsset): FurnitureOrientation[] => {
   const orientations = Object.keys(asset.orientations ?? {}) as FurnitureOrientation[];
@@ -29,6 +50,7 @@ export const furnitureOrientations = (asset: FurnitureAsset): FurnitureOrientati
 };
 export const furnitureTextureKey = (asset: FurnitureAsset, orientation: FurnitureOrientation) => `furniture-${asset.id}-${asset.orientations?.[orientation] ? orientation : furnitureOrientations(asset)[0]}`;
 export const furnitureImage = (asset: FurnitureAsset, orientation: FurnitureOrientation) => asset.orientations?.[orientation] ?? asset.orientations?.[furnitureOrientations(asset)[0]] ?? asset.image;
+export const furnitureOrigin = (asset: FurnitureAsset, orientation: FurnitureOrientation) => asset.originByOrientation?.[orientation] ?? { x: 0.5, y: 0.85 };
 export const defaultFurnitureOrientation = (assetId: string): FurnitureOrientation => { const asset = furnitureAsset(assetId); return asset ? furnitureOrientations(asset)[0] : "north_east"; };
 export const furnitureSeat = (asset: FurnitureAsset, orientation: FurnitureOrientation) => asset.seatByOrientation?.[orientation] ?? asset.seat;
 export const furnitureCells = (items: FurnitureInstance[]) => new Map(items.flatMap((item) => {

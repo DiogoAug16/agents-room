@@ -12,7 +12,7 @@ import { IdleBehaviorController, type IdleBehaviorType } from "./idle-behavior-c
 import { NavigationGrid } from "./maps/navigation-grid";
 import { homeSeatForAgent, IDLE_POINTS, isInsideEmptyRoomFloor, MEETING_AREAS, STATIC_SEATS, staticObstacleKeys, WORKSTATION_CELLS, WORKSTATIONS, type SeatAnchor } from "./maps/office-layout";
 import { SeatRegistry, sameGridPoint, seatApproachWorldPosition, seatedWorldPosition } from "./maps/seats";
-import { FURNITURE_ASSETS, furnitureAsset, furnitureCells, furnitureImage, furnitureInteractionPoints, furnitureOrientations, furnitureSeat, furnitureTextureKey, type AgentSeatAssignments, type FurnitureInstance } from "./furniture/catalog";
+import { FURNITURE_ASSETS, furnitureAsset, furnitureCells, furnitureImage, furnitureInteractionPoints, furnitureOrientations, furnitureOrigin, furnitureSeat, furnitureTextureKey, type AgentSeatAssignments, type FurnitureInstance } from "./furniture/catalog";
 
 type DrawnAgent = { body: Phaser.GameObjects.Container; station: Phaser.GameObjects.Container; sprite: Phaser.GameObjects.Sprite; status: Phaser.GameObjects.Arc; data: Agent; currentCell: Agent["position"]; seatId?: string; idleToken: number };
 type FurnitureLayers = { rear: Phaser.GameObjects.Sprite; front?: Phaser.GameObjects.Sprite };
@@ -177,10 +177,11 @@ export class OfficeScene extends Phaser.Scene {
       const asset = furnitureAsset(item.assetId); if (!asset) return;
       const screen = this.furnitureScreenPosition(item), texture = furnitureTextureKey(asset, item.orientation); let layers = this.furnitureSprites.get(item.id);
       if (!layers) {
-        const rear = this.add.sprite(screen.x, screen.y, texture).setOrigin(0.5, 0.85).setScale(asset.defaultScale ?? 0.75);
+        const origin = furnitureOrigin(asset, item.orientation);
+        const rear = this.add.sprite(screen.x, screen.y, texture).setOrigin(origin.x, origin.y).setScale(asset.defaultScale ?? 0.75);
         if (!item.parentId) rear.setInteractive({ useHandCursor: true }).on("pointerdown", (pointer: Phaser.Input.Pointer) => { pointer.event.stopPropagation(); if (this.editMode) { this.furnitureDrag = item.id; window.dispatchEvent(new CustomEvent("furniture:select", { detail: item.id })); } });
         const frontCropStart = asset.frontOcclusionStart;
-        const front = frontCropStart === undefined ? undefined : this.add.sprite(screen.x, screen.y, texture).setOrigin(0.5, 0.85).setScale(asset.defaultScale ?? 0.75);
+        const front = frontCropStart === undefined ? undefined : this.add.sprite(screen.x, screen.y, texture).setOrigin(origin.x, origin.y).setScale(asset.defaultScale ?? 0.75);
         if (front) {
           const image = this.textures.get(texture).getSourceImage() as { width: number; height: number };
           const start = Math.round(image.height * frontCropStart!);
@@ -190,6 +191,8 @@ export class OfficeScene extends Phaser.Scene {
       } else if (layers.rear.texture.key !== texture) {
         layers.rear.setTexture(texture); layers.front?.setTexture(texture);
       }
+      const origin = furnitureOrigin(asset, item.orientation);
+      layers.rear.setOrigin(origin.x, origin.y); layers.front?.setOrigin(origin.x, origin.y);
       layers.rear.setPosition(screen.x, screen.y).setDepth(screen.y + (item.parentId ? 5 : -4)).setAlpha(this.editMode ? 1 : 0.96);
       layers.front?.setPosition(screen.x, screen.y).setDepth(screen.y + 4).setAlpha(this.editMode ? 1 : 0.96);
     });
