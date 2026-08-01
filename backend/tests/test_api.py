@@ -63,6 +63,7 @@ class ApiTests(unittest.TestCase):
         workspace_id = self.workspace["id"]
         agent = self.client.get(f"/workspaces/{workspace_id}/agents").json()[0]
         self.assertEqual(self.client.patch(f"/agents/{agent['id']}/position", json={"x": 10, "y": 7}).status_code, 409)
+        self.assertEqual(self.client.patch(f"/agents/{agent['id']}/position", json={"x": 4, "y": 14}).status_code, 409)
 
     def test_persists_interaction_and_emits_requested_event(self) -> None:
         workspace_id = self.workspace["id"]

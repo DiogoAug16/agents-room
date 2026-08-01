@@ -21,7 +21,11 @@ ACTIVE_TASK_STATES = ("created", "queued", "starting", "running", "waiting_appro
 task_semaphore = asyncio.Semaphore(3)
 active_providers: dict[str, CodexAgentProvider] = {}
 write_locks: dict[str, asyncio.Lock] = {}
-FURNITURE_CELLS = frozenset({(10, 7), (11, 7), (12, 7), (13, 7), (10, 8), (11, 8), (12, 8), (13, 8)})
+FURNITURE_CELLS = frozenset({
+    (10, 7), (11, 7), (12, 7), (13, 7), (10, 8), (11, 8), (12, 8), (13, 8),
+    (5, 5), (6, 5), (7, 5), (16, 5), (17, 5), (3, 14), (4, 14), (5, 14), (6, 14), (7, 14),
+    (3, 15), (4, 15), (5, 15), (6, 15), (7, 15), (2, 10), (3, 10), (6, 8), (7, 8), (18, 8), (19, 8),
+})
 MAX_DELEGATION_DEPTH = 2
 MAX_SUBTASKS_PER_TASK = 4
 TASK_TIMEOUT_SECONDS = 600

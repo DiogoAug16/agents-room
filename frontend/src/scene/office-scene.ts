@@ -3,13 +3,17 @@ import type { Agent } from "../types";
 import { GRID_HEIGHT, GRID_WIDTH, TILE_HEIGHT, TILE_WIDTH, gridToScreen, isInsideGrid, screenToGrid } from "./grid";
 import { sceneEvents } from "./scene-events";
 import { useSceneStore } from "../stores/scene-store";
-import { cellKey, findPath, releaseAgentReservations, releaseReservation, reserveRoute, reservedByOthers } from "./pathfinding";
+import { cellKey, findNavigationPath, releaseAgentReservations, releaseReservation, reserveRoute, reservedByOthers } from "./pathfinding";
 import type { SceneInteraction } from "./scene-events";
 import { isCheckerboardPixel } from "./character-sheet";
 import { clearEdgeConnectedBackdrop } from "./alpha-mask";
 import { isValidStationCell } from "./station-layout";
+import { IdleBehaviorController, type IdleBehaviorType } from "./idle-behavior-controller";
+import { NavigationGrid } from "./maps/navigation-grid";
+import { homeSeatForAgent, IDLE_POINTS, MEETING_AREAS, STATIC_SEATS, staticObstacleKeys, type SeatAnchor } from "./maps/office-layout";
+import { SeatRegistry, sameGridPoint, seatApproachWorldPosition, seatedWorldPosition } from "./maps/seats";
 
-type DrawnAgent = { body: Phaser.GameObjects.Container; station: Phaser.GameObjects.Container; sprite: Phaser.GameObjects.Sprite; status: Phaser.GameObjects.Arc; data: Agent };
+type DrawnAgent = { body: Phaser.GameObjects.Container; station: Phaser.GameObjects.Container; sprite: Phaser.GameObjects.Sprite; status: Phaser.GameObjects.Arc; data: Agent; currentCell: Agent["position"]; seatId?: string; idleToken: number };
 
 export class OfficeScene extends Phaser.Scene {
   private agents = new Map<string, DrawnAgent>();
@@ -22,7 +26,15 @@ export class OfficeScene extends Phaser.Scene {
   private stationPreview?: Phaser.GameObjects.Graphics;
   private stationDrag?: string;
   private stationOrigin?: Agent["position"];
-  private readonly furnitureCells = new Set(["10,7", "11,7", "12,7", "13,7", "10,8", "11,8", "12,8", "13,8"]);
+  private readonly navigation = new NavigationGrid();
+  private readonly seats = new SeatRegistry();
+  private readonly furnitureCells = staticObstacleKeys;
+  private readonly idlePointOwners = new Map<string, string>();
+  private readonly idleController = new IdleBehaviorController({ canRun: (id) => this.canRunIdle(id), execute: (id, behavior) => this.runIdleBehavior(id, behavior) });
+  private debugGraphics?: Phaser.GameObjects.Graphics;
+  private debugText?: Phaser.GameObjects.Text;
+  private debugEnabled = false;
+  private idleMeetingActive = false;
 
   constructor() { super("office"); }
 
@@ -45,6 +57,7 @@ export class OfficeScene extends Phaser.Scene {
     this.input.on("wheel", (_: Phaser.Input.Pointer, _objects: unknown, _dx: number, dy: number) => this.cameras.main.setZoom(Phaser.Math.Clamp(this.cameras.main.zoom - dy * 0.001, 0.55, 1.15)));
     background.on("pointerdown", (pointer: Phaser.Input.Pointer) => { this.draggingCamera = true; this.lastPointer.set(pointer.x, pointer.y); });
     this.input.on("pointermove", (pointer: Phaser.Input.Pointer) => {
+      if (this.debugEnabled) this.updateDebugPointer(pointer);
       if (this.stationDrag) { this.previewStation(this.stationDrag, pointer); return; }
       if (!this.draggingCamera) return;
       this.cameras.main.scrollX -= (pointer.x - this.lastPointer.x) / this.cameras.main.zoom;
@@ -60,9 +73,10 @@ export class OfficeScene extends Phaser.Scene {
     this.sync(new CustomEvent("agents", { detail: { agents: useSceneStore.getState().agents, editMode: useSceneStore.getState().editMode } }));
     this.input.keyboard?.on("keydown-F", () => this.focusSelected());
     this.input.keyboard?.on("keydown-ESC", () => window.dispatchEvent(new Event("agent:deselect")));
+    if (import.meta.env.DEV) this.input.keyboard?.on("keydown-N", () => this.toggleNavigationDebug());
   }
 
-  shutdown() { sceneEvents.removeEventListener("agents", this.sync as EventListener); sceneEvents.removeEventListener("interaction", this.interact as EventListener); }
+  shutdown() { this.idleController.cancelAll(); sceneEvents.removeEventListener("agents", this.sync as EventListener); sceneEvents.removeEventListener("interaction", this.interact as EventListener); }
 
   private drawGrid() {
     const graphics = this.add.graphics().setDepth(-50).setAlpha(0.48).setVisible(false);
@@ -80,9 +94,19 @@ export class OfficeScene extends Phaser.Scene {
     this.editMode = editMode;
     this.gridGraphics?.setVisible(editMode);
     if (!editMode) { this.stationDrag = undefined; this.stationOrigin = undefined; this.stationPreview?.clear(); }
+    if (editMode) this.idleController.cancelAll();
     const currentIds = new Set(agents.map((agent) => agent.id));
-    this.agents.forEach(({ body, station }, id) => { if (!currentIds.has(id)) { body.destroy(); station.destroy(); this.agents.delete(id); } });
+    this.agents.forEach((drawn, id) => {
+      if (currentIds.has(id)) return;
+      this.idleController.cancelBehavior(id);
+      releaseAgentReservations(this.routeReservations, id);
+      this.idlePointOwners.forEach((owner, pointId) => { if (owner === id) this.idlePointOwners.delete(pointId); });
+      this.leaveSeatForWalking(drawn);
+      drawn.body.destroy(); drawn.station.destroy(); this.agents.delete(id);
+    });
     agents.forEach((agent) => this.drawAgent(agent));
+    if (!editMode) agents.forEach((agent) => this.scheduleIdle(agent.id));
+    this.renderNavigationDebug();
   };
 
   private drawAgent(agent: Agent) {
@@ -102,7 +126,7 @@ export class OfficeScene extends Phaser.Scene {
       });
       container.on("pointerover", () => container.setScale(1.08));
       container.on("pointerout", () => container.setScale(1));
-      drawn = { body: container, station, sprite, status, data: agent };
+      drawn = { body: container, station, sprite, status, data: agent, currentCell: { ...agent.position }, idleToken: 0 };
       this.agents.set(agent.id, drawn);
     }
     drawn.data = agent;
@@ -110,7 +134,9 @@ export class OfficeScene extends Phaser.Scene {
     drawn.station.setPosition(screen.x, screen.y).setDepth(screen.y - 1).setVisible(this.editMode);
     drawn.status.setFillStyle(this.statusColor(agent.status));
     this.playVisualState(drawn.sprite, agent);
-    this.tweens.add({ targets: drawn.body, x: screen.x, y: screen.y, duration: 240, ease: "Sine.out" });
+    const homeSeat = this.homeSeat(agent);
+    if (this.isSeatVisualState(agent.status) && (drawn.seatId === homeSeat.id || (!drawn.seatId && sameGridPoint(drawn.currentCell, agent.position)))) this.attachAgentToSeat(drawn, homeSeat, agent.status === "working");
+    else if (!drawn.seatId) { drawn.currentCell = { ...agent.position }; this.tweens.add({ targets: drawn.body, x: screen.x, y: screen.y, duration: 240, ease: "Sine.out" }); }
   }
 
   private moveToCell(id: string, pointer: Phaser.Input.Pointer) {
@@ -150,7 +176,35 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   private isStationCellValid(agentId: string, cell: Agent["position"]) {
-    return isValidStationCell(cell, agentId, [...this.agents.values()].map(({ data }) => data), this.furnitureCells);
+    return this.navigation.canEnter({ x: cell.x, y: cell.y + 1 }, agentId) && isValidStationCell(cell, agentId, [...this.agents.values()].map(({ data }) => data), this.furnitureCells);
+  }
+
+  private homeSeat(agent: Agent): SeatAnchor { return homeSeatForAgent(agent); }
+  private isSeatVisualState(status: Agent["status"]) { return ["idle", "seated", "working", "waiting_approval", "completed"].includes(status); }
+  private attachAgentToSeat(agent: DrawnAgent, seat: SeatAnchor, typing = false) {
+    if (!this.seats.occupy(seat, agent.data.id)) return false;
+    const world = seatedWorldPosition(seat); agent.body.setPosition(world.x, world.y).setDepth(world.y); agent.currentCell = { ...seat.gridPosition }; agent.seatId = seat.id;
+    if (typing) agent.sprite.play(`${this.textureFor(agent.data)}-typing-${seat.facing}`, true);
+    else agent.sprite.stop().setFrame(this.seatedFrame(seat.facing));
+    return true;
+  }
+  private detachAgentFromSeat(agent: DrawnAgent, seat: SeatAnchor) {
+    this.seats.release(seat, agent.data.id); const world = seatApproachWorldPosition(seat);
+    agent.body.setPosition(world.x, world.y).setDepth(world.y); agent.currentCell = { ...seat.approachPosition }; agent.seatId = undefined; agent.sprite.stop().setFrame(8);
+  }
+  private leaveSeatForWalking(agent: DrawnAgent) {
+    if (!agent.seatId) return;
+    const seat = agent.seatId === this.homeSeat(agent.data).id ? this.homeSeat(agent.data) : STATIC_SEATS.find((item) => item.id === agent.seatId);
+    if (seat) this.detachAgentFromSeat(agent, seat);
+  }
+  private async returnToWorkstation(agent: DrawnAgent, token?: number) {
+    const seat = this.homeSeat(agent.data); if (!this.seats.reserve(seat, agent.data.id)) return false;
+    const route = this.planRoute(agent.data.id, agent.currentCell, seat.approachPosition); if (!route) { this.seats.release(seat, agent.data.id); return false; }
+    await this.walk(agent, route, token);
+    if (token !== undefined && token !== agent.idleToken) { this.seats.release(seat, agent.data.id); return false; }
+    const attached = this.attachAgentToSeat(agent, seat, agent.data.status === "working");
+    if (!attached) this.seats.release(seat, agent.data.id);
+    return attached;
   }
 
   private interact = (event: Event) => { void this.runInteraction((event as CustomEvent<SceneInteraction>).detail); };
@@ -160,10 +214,11 @@ export class OfficeScene extends Phaser.Scene {
     const source = this.agents.get(interaction.sourceAgentId);
     const target = this.agents.get(interaction.targetAgentId);
     if (!source || !target || this.activeInteractions.has(source.data.id) || this.activeInteractions.has(target.data.id)) return;
+    this.idleController.cancelBehavior(source.data.id); this.idleController.cancelBehavior(target.data.id); this.leaveSeatForWalking(source);
     const blocked = this.blockedCellsFor(source.data.id);
-    const destination = [{ x: target.data.position.x, y: target.data.position.y + 1 }, { x: target.data.position.x + 1, y: target.data.position.y }, { x: target.data.position.x - 1, y: target.data.position.y }, { x: target.data.position.x, y: target.data.position.y - 1 }].find((cell) => isInsideGrid(cell) && !blocked.has(cellKey(cell)));
+    const destination = [{ x: target.currentCell.x, y: target.currentCell.y + 1 }, { x: target.currentCell.x + 1, y: target.currentCell.y }, { x: target.currentCell.x - 1, y: target.currentCell.y }, { x: target.currentCell.x, y: target.currentCell.y - 1 }].find((cell) => isInsideGrid(cell) && this.navigation.canEnter(cell, source.data.id, blocked));
     if (!destination) { window.dispatchEvent(new CustomEvent("interaction:failed", { detail: interaction })); return; }
-    const route = this.planRoute(source.data.id, source.data.position, destination);
+    const route = this.planRoute(source.data.id, source.currentCell, destination);
     if (!route) { window.dispatchEvent(new CustomEvent("interaction:failed", { detail: interaction })); return; }
     this.activeInteractions.add(interaction.interactionId); this.activeInteractions.add(source.data.id); this.activeInteractions.add(target.data.id);
     window.dispatchEvent(new CustomEvent("interaction:started", { detail: interaction }));
@@ -173,9 +228,7 @@ export class OfficeScene extends Phaser.Scene {
       const bubble = this.add.text(target.body.x, target.body.y - 138, interaction.summary, { fontFamily: "Inter, sans-serif", fontSize: "14px", color: "#18252c", backgroundColor: "#f5fbfd", wordWrap: { width: 260 }, padding: { x: 10, y: 7 } }).setOrigin(0.5).setDepth(99999);
       await this.wait(1600);
       bubble.destroy();
-      const returnRoute = this.planRoute(source.data.id, destination, source.data.basePosition);
-      if (!returnRoute) { window.dispatchEvent(new CustomEvent("interaction:failed", { detail: interaction })); return; }
-      await this.walk(source, returnRoute);
+      if (!await this.returnToWorkstation(source)) { window.dispatchEvent(new CustomEvent("interaction:failed", { detail: interaction })); return; }
       this.playVisualState(source.sprite, { ...source.data, status: "working" });
       window.dispatchEvent(new CustomEvent("interaction:completed", { detail: interaction }));
     } finally {
@@ -184,20 +237,22 @@ export class OfficeScene extends Phaser.Scene {
     }
   }
 
-  private async walk(agent: DrawnAgent, route: Agent["position"][]) {
+  private async walk(agent: DrawnAgent, route: Agent["position"][], token?: number) {
     for (let index = 1; index < route.length; index++) {
+      if (token !== undefined && token !== agent.idleToken) return;
       const previous = route[index - 1], next = route[index];
       agent.sprite.play(`${this.textureFor(agent.data)}-walk-${next.x > previous.x ? "east" : next.x < previous.x ? "west" : next.y > previous.y ? "south" : "north"}`, true);
       const screen = gridToScreen(next);
       await new Promise<void>((resolve) => this.tweens.add({ targets: agent.body, x: screen.x, y: screen.y, duration: 180, ease: "Sine.out", onComplete: () => resolve() }));
+      agent.currentCell = { ...next };
       releaseReservation(this.routeReservations, agent.data.id, previous);
     }
     agent.sprite.stop();
   }
 
   private blockedCellsFor(agentId: string) {
-    const blocked = new Set(this.furnitureCells);
-    this.agents.forEach(({ data }, id) => { if (id !== agentId) blocked.add(cellKey(data.position)); });
+    const blocked = new Set<string>();
+    this.agents.forEach(({ currentCell }, id) => { if (id !== agentId) blocked.add(cellKey(currentCell)); });
     reservedByOthers(this.routeReservations, agentId).forEach((cell) => blocked.add(cell));
     return blocked;
   }
@@ -205,7 +260,7 @@ export class OfficeScene extends Phaser.Scene {
   private planRoute(agentId: string, start: Agent["position"], goal: Agent["position"]) {
     // ponytail: two attempts cover synchronous contention; queue routes if traffic grows.
     for (let attempt = 0; attempt < 2; attempt++) {
-      const route = findPath(start, goal, this.blockedCellsFor(agentId));
+      const route = findNavigationPath(start, goal, this.navigation, agentId, this.blockedCellsFor(agentId));
       if (!route) return null;
       if (reserveRoute(this.routeReservations, agentId, route)) return route;
     }
@@ -213,6 +268,61 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   private wait(milliseconds: number) { return new Promise<void>((resolve) => this.time.delayedCall(milliseconds, resolve)); }
+
+  private scheduleIdle(agentId: string) {
+    if (this.canRunIdle(agentId)) { this.idleController.scheduleNextBehavior(agentId); return; }
+    this.idleController.cancelBehavior(agentId);
+    const agent = this.agents.get(agentId);
+    if (agent && ["queued", "working", "waiting_approval"].includes(agent.data.status)) this.interruptIdleForWork(agent);
+  }
+  private interruptIdleForWork(agent: DrawnAgent) {
+    const home = this.homeSeat(agent.data);
+    if (agent.seatId === home.id || this.activeInteractions.has(agent.data.id)) return;
+    agent.idleToken += 1;
+    this.idlePointOwners.forEach((owner, id) => { if (owner === agent.data.id) this.idlePointOwners.delete(id); });
+    this.leaveSeatForWalking(agent);
+    void this.returnToWorkstation(agent);
+  }
+  private canRunIdle(agentId: string) {
+    const agent = this.agents.get(agentId); if (!agent || this.editMode || this.stationDrag || this.activeInteractions.has(agentId)) return false;
+    const allowed = ["idle", "seated", "completed"]; const away = [...this.agents.values()].filter((item) => item.seatId === undefined).length;
+    return allowed.includes(agent.data.status) && away < Math.max(1, Math.floor(this.agents.size * 0.4));
+  }
+  private reserveIdlePoint(agentId: string) {
+    const point = IDLE_POINTS.find((item) => !this.idlePointOwners.has(item.id));
+    if (point) this.idlePointOwners.set(point.id, agentId);
+    return point;
+  }
+  private async runIdleBehavior(agentId: string, behavior: IdleBehaviorType) {
+    const agent = this.agents.get(agentId); if (!agent || !this.canRunIdle(agentId)) return; const token = ++agent.idleToken;
+    if (behavior === "remain_seated") { await this.wait(1200); return; }
+    if (behavior === "typing") { agent.sprite.play(`${this.textureFor(agent.data)}-typing-north`, true); await this.wait(2200); if (token === agent.idleToken) agent.sprite.stop().setFrame(this.seatedFrame("north")); return; }
+    if (behavior === "look_around") { agent.sprite.stop().setFrame(this.seatedFrame("east")); await this.wait(1400); if (token === agent.idleToken) agent.sprite.stop().setFrame(this.seatedFrame("north")); return; }
+    if (behavior === "join_idle_meeting") { await this.runIdleMeeting(agent, token); return; }
+    const targetSeat = behavior === "sit_on_sofa" ? STATIC_SEATS.find((seat) => seat.type === "sofa_seat" && this.seats.reserve(seat, agentId)) : undefined;
+    const targetPoint = targetSeat ? targetSeat.approachPosition : this.reserveIdlePoint(agentId)?.gridPosition;
+    if (!targetPoint) return;
+    this.leaveSeatForWalking(agent); const route = this.planRoute(agentId, agent.currentCell, targetPoint); if (!route) { if (targetSeat) this.seats.release(targetSeat, agentId); this.idlePointOwners.forEach((owner, id) => { if (owner === agentId) this.idlePointOwners.delete(id); }); return; }
+    await this.walk(agent, route, token); if (token !== agent.idleToken) return;
+    if (targetSeat) this.attachAgentToSeat(agent, targetSeat);
+    await this.wait(behavior === "short_walk" ? 900 : 2600);
+    if (targetSeat) this.detachAgentFromSeat(agent, targetSeat);
+    if (targetPoint) this.idlePointOwners.forEach((owner, id) => { if (owner === agentId) this.idlePointOwners.delete(id); });
+    if (token === agent.idleToken) await this.returnToWorkstation(agent, token);
+  }
+  private async runIdleMeeting(host: DrawnAgent, token: number) {
+    if (this.idleMeetingActive) return; const peer = [...this.agents.values()].find((agent) => agent.data.id !== host.data.id && this.canRunIdle(agent.data.id)); const seats = MEETING_AREAS[0].seatIds.map((id) => STATIC_SEATS.find((seat) => seat.id === id)!).filter((seat) => !this.seats.occupiedBy(seat.id));
+    if (!peer || seats.length < 2 || !this.seats.reserve(seats[0], host.data.id) || !this.seats.reserve(seats[1], peer.data.id)) { this.seats.release(seats[0], host.data.id); return; }
+    this.idleMeetingActive = true; this.idleController.cancelBehavior(peer.data.id); this.leaveSeatForWalking(host); this.leaveSeatForWalking(peer);
+    try {
+      const hostRoute = this.planRoute(host.data.id, host.currentCell, seats[0].approachPosition), peerRoute = this.planRoute(peer.data.id, peer.currentCell, seats[1].approachPosition);
+      if (!hostRoute || !peerRoute) return;
+      await Promise.all([this.walk(host, hostRoute, token), this.walk(peer, peerRoute, ++peer.idleToken)]); if (token !== host.idleToken) return;
+      this.attachAgentToSeat(host, seats[0]); this.attachAgentToSeat(peer, seats[1]);
+      const bubble = this.add.text((host.body.x + peer.body.x) / 2, Math.min(host.body.y, peer.body.y) - 100, "Alinhamento rápido", { fontFamily: "Inter, sans-serif", fontSize: "13px", color: "#18252c", backgroundColor: "#f5fbfd", padding: { x: 8, y: 5 } }).setOrigin(0.5).setDepth(99999);
+      await this.wait(2600); bubble.destroy(); this.detachAgentFromSeat(host, seats[0]); this.detachAgentFromSeat(peer, seats[1]); await Promise.all([this.returnToWorkstation(host, token), this.returnToWorkstation(peer)]);
+    } finally { this.idleMeetingActive = false; this.seats.release(seats[0], host.data.id); this.seats.release(seats[1], peer.data.id); }
+  }
 
   private textureFor(agent: Agent) { return `agent-${([...this.agents.keys(), agent.id].indexOf(agent.id) % 3) + 1}-clean`; }
 
@@ -249,20 +359,42 @@ export class OfficeScene extends Phaser.Scene {
     [1, 2, 3].forEach((index) => {
       const texture = `agent-${index}-clean`;
       (["north", "south", "east", "west"] as const).forEach((direction, row) => this.anims.create({ key: `${texture}-walk-${direction}`, frames: this.anims.generateFrameNumbers(texture, { start: row * 8, end: row * 8 + 7 }), frameRate: 8, repeat: -1 }));
-      this.anims.create({ key: `${texture}-typing-south`, frames: this.anims.generateFrameNumbers(texture, { start: 42, end: 47 }), frameRate: 5, repeat: -1 });
+      (["north", "south", "east", "west"] as const).forEach((direction, row) => this.anims.create({ key: `${texture}-typing-${direction}`, frames: this.anims.generateFrameNumbers(texture, { start: 34 + row * 8, end: 39 + row * 8 }), frameRate: 5, repeat: -1 }));
     });
   }
 
   private playVisualState(sprite: Phaser.GameObjects.Sprite, agent: Agent) {
     const texture = this.textureFor(agent);
     if (agent.status === "walking" || agent.status === "returning") sprite.play(`${texture}-walk-${agent.direction}`, true);
-    else if (agent.status === "working") sprite.play(`${texture}-typing-south`, true);
-    else { sprite.stop(); sprite.setFrame(agent.status === "seated" ? 40 : 8); }
+    else if (agent.status === "working") sprite.play(`${texture}-typing-${agent.direction}`, true);
+    else { sprite.stop(); sprite.setFrame(this.isSeatVisualState(agent.status) ? this.seatedFrame(agent.direction) : 8); }
   }
+
+  private seatedFrame(direction: Agent["direction"]) { return { north: 32, south: 40, east: 48, west: 56 }[direction]; }
 
   private focusSelected() {
     const selected = [...this.agents.values()].find(({ data }) => data.id === (window as Window & { selectedAgentId?: string }).selectedAgentId);
     if (selected) this.cameras.main.pan(selected.body.x, selected.body.y, 250, "Sine.easeInOut");
+  }
+
+  private toggleNavigationDebug() { this.debugEnabled = !this.debugEnabled; this.renderNavigationDebug(); }
+  private renderNavigationDebug() {
+    if (!import.meta.env.DEV) return;
+    if (!this.debugGraphics) this.debugGraphics = this.add.graphics().setDepth(99_998);
+    if (!this.debugText) this.debugText = this.add.text(8, 8, "", { fontFamily: "JetBrains Mono, monospace", fontSize: "11px", color: "#e8f8fb", backgroundColor: "#142028", padding: { x: 6, y: 4 } }).setScrollFactor(0).setDepth(100_000);
+    this.debugGraphics.clear().setVisible(this.debugEnabled); this.debugText.setVisible(this.debugEnabled);
+    if (!this.debugEnabled) return;
+    const colors = { corridor: 0x4c9eea, walkable: 0x4cae9b, work_area: 0x75c8ae, meeting_area: 0xb48ce8, rest_area: 0xc18ae8, blocked: 0xdf7a7a, seat: 0xaf75dc, interaction_point: 0xe5a744 };
+    this.navigation.allCells().forEach((cell) => { const point = gridToScreen({ x: cell.gridX, y: cell.gridY }); const color = colors[cell.type]; this.debugGraphics!.fillStyle(color, cell.walkable ? 0.13 : 0.23).fillPoints([new Phaser.Geom.Point(point.x, point.y - TILE_HEIGHT / 2), new Phaser.Geom.Point(point.x + TILE_WIDTH / 2, point.y), new Phaser.Geom.Point(point.x, point.y + TILE_HEIGHT / 2), new Phaser.Geom.Point(point.x - TILE_WIDTH / 2, point.y)], true); });
+    this.agents.forEach((agent) => {
+      const seat = this.homeSeat(agent.data); const point = gridToScreen(seat.approachPosition);
+      this.debugGraphics!.fillStyle(0x6ee9ef, 0.9).fillCircle(point.x, point.y, 4).lineStyle(1, 0xffffff, 0.75).strokeRect(agent.body.x - 18, agent.body.y - 34, 36, 38);
+    });
+    this.debugText.setText(`N debug · azul corredor · vermelho bloqueado · roxo assento · ciano aproximação\n${[...this.agents.values()].map((agent) => `${agent.data.id}: ${agent.currentCell.x},${agent.currentCell.y} pés ${Math.round(agent.body.x)},${Math.round(agent.body.y)}`).join(" · ")}`);
+  }
+  private updateDebugPointer(pointer: Phaser.Input.Pointer) {
+    if (!this.debugText) return; const world = this.cameras.main.getWorldPoint(pointer.x, pointer.y); const grid = screenToGrid(world.x, world.y);
+    this.debugText.setText(`N debug · grid ${grid.x},${grid.y} · screen ${Math.round(world.x)},${Math.round(world.y)}\nazul corredor · vermelho bloqueado · roxo assento · ciano aproximação`);
   }
 
   private statusColor(status: Agent["status"]) {

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { cellKey, findPath, releaseReservation, reserveRoute, reservedByOthers } from "./pathfinding";
+import { cellKey, findNavigationPath, findPath, releaseReservation, reserveRoute, reservedByOthers } from "./pathfinding";
+import { NavigationGrid } from "./maps/navigation-grid";
 
 describe("A* pathfinding", () => {
   it("routes around a blocked cell without diagonal moves", () => {
@@ -23,5 +24,13 @@ describe("A* pathfinding", () => {
     expect(findPath({ x: 1, y: 1 }, { x: 3, y: 1 }, reservedByOthers(reservations, "bruno"))).toEqual([
       { x: 1, y: 1 }, { x: 1, y: 0 }, { x: 2, y: 0 }, { x: 3, y: 0 }, { x: 3, y: 1 },
     ]);
+  });
+
+  it("uses only declared navigation cells and reaches a chair approach", () => {
+    const navigation = new NavigationGrid();
+    const path = findNavigationPath({ x: 8, y: 9 }, { x: 8, y: 7 }, navigation, "ana", new Set());
+    expect(path?.at(-1)).toEqual({ x: 8, y: 7 });
+    expect(path?.every((point) => navigation.cellAt(point)?.walkable)).toBe(true);
+    expect(findNavigationPath({ x: 8, y: 9 }, { x: 10, y: 7 }, navigation, "ana", new Set())).toBeNull();
   });
 });
