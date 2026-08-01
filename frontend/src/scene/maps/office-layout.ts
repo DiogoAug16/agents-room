@@ -8,6 +8,7 @@ export type SeatAnchor = { id: string; type: SeatType; gridPosition: GridPoint; 
 export type CorridorArea = { id: string; cells: GridPoint[]; priority: number };
 export type IdlePoint = { id: string; type: "corridor_pause" | "window_view" | "plant_area" | "water_cooler" | "sofa" | "meeting_point" | "workstation_wait"; gridPosition: GridPoint; facing?: Direction; capacity: number };
 export type MeetingArea = { id: string; seatIds: string[]; standingPoints: GridPoint[]; maxParticipants: number };
+export type WorkstationAnchor = { id: string; gridPosition: GridPoint; approachPosition: GridPoint; seatedSpriteOffset: GridPoint; facing: Direction };
 
 const line = (from: GridPoint, to: GridPoint): GridPoint[] => {
   const cells: GridPoint[] = [];
@@ -18,44 +19,55 @@ const line = (from: GridPoint, to: GridPoint): GridPoint[] => {
 const key = ({ x, y }: GridPoint) => `${x},${y}`;
 
 export const CORRIDORS: CorridorArea[] = [
-  { id: "main-east-west", cells: line({ x: 1, y: 9 }, { x: 22, y: 9 }), priority: 1 },
-  { id: "main-north-south", cells: line({ x: 14, y: 2 }, { x: 14, y: 13 }), priority: 1 },
-  { id: "left-access", cells: line({ x: 8, y: 3 }, { x: 8, y: 13 }), priority: 1 },
-  { id: "south-access", cells: line({ x: 2, y: 12 }, { x: 21, y: 12 }), priority: 1 },
-  { id: "meeting-access", cells: line({ x: 12, y: 5 }, { x: 12, y: 9 }), priority: 2 },
-  { id: "window-access", cells: line({ x: 18, y: 4 }, { x: 18, y: 12 }), priority: 2 },
-  { id: "lounge-access", cells: [...line({ x: 4, y: 12 }, { x: 4, y: 13 }), ...line({ x: 4, y: 13 }, { x: 7, y: 13 })], priority: 2 },
+  { id: "meeting-access", cells: line({ x: 7, y: 5 }, { x: 7, y: 13 }), priority: 1 },
+  { id: "meeting-chair-access", cells: [...line({ x: 7, y: 3 }, { x: 7, y: 5 }), ...line({ x: 7, y: 3 }, { x: 9, y: 3 }), ...line({ x: 9, y: 3 }, { x: 9, y: 4 })], priority: 1 },
+  { id: "central-desk-access", cells: line({ x: 14, y: 9 }, { x: 14, y: 13 }), priority: 1 },
+  { id: "main-access", cells: line({ x: 7, y: 13 }, { x: 15, y: 13 }), priority: 1 },
+  { id: "south-access", cells: line({ x: 15, y: 13 }, { x: 15, y: 20 }), priority: 1 },
+  { id: "lounge-access", cells: [...line({ x: 8, y: 20 }, { x: 15, y: 20 }), ...line({ x: 8, y: 20 }, { x: 8, y: 21 })], priority: 1 },
+  { id: "sofa-center-access", cells: [...line({ x: 10, y: 19 }, { x: 10, y: 20 }), ...line({ x: 10, y: 20 }, { x: 15, y: 20 })], priority: 2 },
+  { id: "sofa-right-access", cells: [...line({ x: 12, y: 17 }, { x: 12, y: 20 }), ...line({ x: 12, y: 20 }, { x: 15, y: 20 })], priority: 2 },
 ];
 
 export const STATIC_OBSTACLES: GridPoint[] = [
-  ...line({ x: 10, y: 7 }, { x: 13, y: 7 }), ...line({ x: 10, y: 8 }, { x: 13, y: 8 }),
-  ...line({ x: 5, y: 5 }, { x: 7, y: 5 }), ...line({ x: 16, y: 5 }, { x: 17, y: 5 }),
-  ...line({ x: 3, y: 14 }, { x: 7, y: 15 }),
-  { x: 2, y: 10 }, { x: 3, y: 10 }, { x: 6, y: 8 }, { x: 7, y: 8 }, { x: 18, y: 8 }, { x: 19, y: 8 },
+  ...line({ x: 8, y: 5 }, { x: 12, y: 5 }), { x: 8, y: 6 }, { x: 10, y: 6 }, { x: 11, y: 6 }, { x: 12, y: 6 },
+  ...line({ x: 8, y: 10 }, { x: 12, y: 10 }), ...line({ x: 17, y: 8 }, { x: 21, y: 8 }),
+  ...line({ x: 7, y: 22 }, { x: 13, y: 23 }),
 ];
-export const WORK_AREA_CELLS: GridPoint[] = [...line({ x: 5, y: 8 }, { x: 19, y: 8 }), ...line({ x: 5, y: 11 }, { x: 19, y: 11 }), { x: 8, y: 7 }, { x: 14, y: 9 }, { x: 12, y: 6 }];
+export const WORKSTATIONS: WorkstationAnchor[] = [
+  { id: "desk-left-lower", gridPosition: { x: 9, y: 12 }, approachPosition: { x: 9, y: 13 }, seatedSpriteOffset: { x: 0, y: -2 }, facing: "north" },
+  { id: "meeting-left", gridPosition: { x: 10, y: 4 }, approachPosition: { x: 9, y: 4 }, seatedSpriteOffset: { x: 0, y: -4 }, facing: "north" },
+  { id: "desk-center", gridPosition: { x: 15, y: 10 }, approachPosition: { x: 15, y: 11 }, seatedSpriteOffset: { x: 0, y: -4 }, facing: "north" },
+  { id: "desk-right", gridPosition: { x: 19, y: 10 }, approachPosition: { x: 19, y: 11 }, seatedSpriteOffset: { x: 0, y: -4 }, facing: "north" },
+  { id: "desk-lounge", gridPosition: { x: 13, y: 16 }, approachPosition: { x: 13, y: 17 }, seatedSpriteOffset: { x: 0, y: -4 }, facing: "north" },
+  { id: "desk-south", gridPosition: { x: 16, y: 14 }, approachPosition: { x: 16, y: 15 }, seatedSpriteOffset: { x: 0, y: -4 }, facing: "north" },
+  { id: "desk-sofa", gridPosition: { x: 11, y: 18 }, approachPosition: { x: 11, y: 19 }, seatedSpriteOffset: { x: 0, y: -4 }, facing: "north" },
+  { id: "desk-window", gridPosition: { x: 16, y: 12 }, approachPosition: { x: 16, y: 13 }, seatedSpriteOffset: { x: 0, y: -4 }, facing: "north" },
+];
+export const WORKSTATION_CELLS: GridPoint[] = WORKSTATIONS.map((anchor) => anchor.gridPosition);
+export const WORK_AREA_CELLS: GridPoint[] = WORKSTATIONS.map((anchor) => anchor.approachPosition);
 
 export const STATIC_SEATS: SeatAnchor[] = [
-  { id: "meeting-north", type: "meeting_chair", gridPosition: { x: 12, y: 5 }, approachPosition: { x: 12, y: 6 }, seatedSpriteOffset: { x: 0, y: -18 }, facing: "north", depthOffset: -2 },
-  { id: "meeting-east", type: "meeting_chair", gridPosition: { x: 15, y: 6 }, approachPosition: { x: 14, y: 6 }, seatedSpriteOffset: { x: -8, y: -13 }, facing: "west", depthOffset: -2 },
-  { id: "sofa-bottom-left", type: "sofa_seat", gridPosition: { x: 4, y: 14 }, approachPosition: { x: 4, y: 13 }, seatedSpriteOffset: { x: -9, y: -18 }, facing: "north", depthOffset: -3 },
-  { id: "sofa-bottom-center", type: "sofa_seat", gridPosition: { x: 5, y: 14 }, approachPosition: { x: 5, y: 13 }, seatedSpriteOffset: { x: 0, y: -19 }, facing: "north", depthOffset: -3 },
-  { id: "sofa-bottom-right", type: "sofa_seat", gridPosition: { x: 6, y: 14 }, approachPosition: { x: 6, y: 13 }, seatedSpriteOffset: { x: 9, y: -18 }, facing: "north", depthOffset: -3 },
-  { id: "waiting-window", type: "waiting_chair", gridPosition: { x: 18, y: 6 }, approachPosition: { x: 18, y: 7 }, seatedSpriteOffset: { x: 0, y: -15 }, facing: "north", depthOffset: -2 },
+  { id: "meeting-north", type: "meeting_chair", gridPosition: { x: 7, y: 4 }, approachPosition: { x: 7, y: 5 }, seatedSpriteOffset: { x: 0, y: -8 }, facing: "north", depthOffset: -2 },
+  { id: "meeting-east", type: "meeting_chair", gridPosition: { x: 13, y: 7 }, approachPosition: { x: 13, y: 8 }, seatedSpriteOffset: { x: -6, y: -8 }, facing: "west", depthOffset: -2 },
+  { id: "sofa-bottom-left", type: "sofa_seat", gridPosition: { x: 8, y: 22 }, approachPosition: { x: 8, y: 21 }, seatedSpriteOffset: { x: -7, y: -9 }, facing: "north", depthOffset: -3 },
+  { id: "sofa-bottom-center", type: "sofa_seat", gridPosition: { x: 10, y: 20 }, approachPosition: { x: 10, y: 19 }, seatedSpriteOffset: { x: 0, y: -9 }, facing: "north", depthOffset: -3 },
+  { id: "sofa-bottom-right", type: "sofa_seat", gridPosition: { x: 12, y: 18 }, approachPosition: { x: 12, y: 17 }, seatedSpriteOffset: { x: 7, y: -9 }, facing: "north", depthOffset: -3 },
+  { id: "waiting-window", type: "waiting_chair", gridPosition: { x: 15, y: 10 }, approachPosition: { x: 15, y: 11 }, seatedSpriteOffset: { x: 0, y: -8 }, facing: "north", depthOffset: -2 },
 ];
 
-export const MEETING_AREAS: MeetingArea[] = [{ id: "lounge-sync", seatIds: ["sofa-bottom-left", "sofa-bottom-center", "sofa-bottom-right"], standingPoints: [{ x: 7, y: 13 }, { x: 8, y: 12 }], maxParticipants: 3 }];
+export const MEETING_AREAS: MeetingArea[] = [{ id: "lounge-sync", seatIds: ["sofa-bottom-left", "sofa-bottom-center", "sofa-bottom-right"], standingPoints: [{ x: 11, y: 20 }, { x: 13, y: 20 }], maxParticipants: 3 }];
 export const IDLE_POINTS: IdlePoint[] = [
-  { id: "window-view", type: "window_view", gridPosition: { x: 18, y: 4 }, facing: "north", capacity: 1 },
-  { id: "water-cooler", type: "water_cooler", gridPosition: { x: 8, y: 12 }, facing: "east", capacity: 1 },
-  { id: "plant-pause", type: "plant_area", gridPosition: { x: 4, y: 12 }, facing: "north", capacity: 1 },
-  { id: "corridor-pause", type: "corridor_pause", gridPosition: { x: 14, y: 10 }, facing: "south", capacity: 1 },
-  { id: "meeting-point", type: "meeting_point", gridPosition: { x: 12, y: 6 }, facing: "south", capacity: 2 },
+  { id: "water-cooler", type: "water_cooler", gridPosition: { x: 15, y: 16 }, facing: "east", capacity: 1 },
+  { id: "plant-pause", type: "plant_area", gridPosition: { x: 9, y: 20 }, facing: "north", capacity: 1 },
+  { id: "corridor-pause", type: "corridor_pause", gridPosition: { x: 14, y: 13 }, facing: "south", capacity: 1 },
+  { id: "meeting-point", type: "meeting_point", gridPosition: { x: 13, y: 20 }, facing: "south", capacity: 1 },
 ];
 
 export function homeSeatForAgent(agent: { id: string; basePosition: GridPoint }): SeatAnchor {
-  const seat = agent.basePosition;
-  return { id: `workstation-${agent.id}-seat`, type: "office_chair", gridPosition: seat, approachPosition: { x: seat.x, y: seat.y + 1 }, seatedSpriteOffset: { x: 0, y: -18 }, facing: "north", workstationId: `workstation-${agent.id}`, ownerAgentId: agent.id, depthOffset: -2 };
+  const anchor = WORKSTATIONS.find((item) => item.gridPosition.x === agent.basePosition.x && item.gridPosition.y === agent.basePosition.y);
+  const seat = anchor ?? { id: "fallback", gridPosition: agent.basePosition, approachPosition: { x: agent.basePosition.x, y: agent.basePosition.y + 1 }, seatedSpriteOffset: { x: 0, y: -4 }, facing: "north" as Direction };
+  return { id: `workstation-${agent.id}-seat`, type: "office_chair", gridPosition: seat.gridPosition, approachPosition: seat.approachPosition, seatedSpriteOffset: seat.seatedSpriteOffset, facing: seat.facing, workstationId: `workstation-${agent.id}`, ownerAgentId: agent.id, depthOffset: -2 };
 }
 
 export const staticObstacleKeys = new Set(STATIC_OBSTACLES.map(key));

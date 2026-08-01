@@ -2,10 +2,11 @@ import type { GridPoint } from "../types";
 
 export const TILE_WIDTH = 64;
 export const TILE_HEIGHT = 32;
-export const GRID_WIDTH = 24;
-export const GRID_HEIGHT = 16;
-// Calibrated against the supplied office art: logical row 0 begins at the usable floor, not the skyline.
-export const ORIGIN = { x: 768, y: 300 };
+export const GRID_WIDTH = 32;
+export const GRID_HEIGHT = 28;
+// Calibrated from the supplied art: this is the north point of the usable floor,
+// not the canvas origin or the skyline.
+export const ORIGIN = { x: 900, y: 300 };
 
 export function gridToScreen({ x, y }: GridPoint) {
   return { x: ORIGIN.x + (x - y) * TILE_WIDTH / 2, y: ORIGIN.y + (x + y) * TILE_HEIGHT / 2 };

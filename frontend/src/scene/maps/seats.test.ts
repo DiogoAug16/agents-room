@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { SeatRegistry, seatedWorldPosition } from "./seats";
 import { STATIC_SEATS, type SeatAnchor } from "./office-layout";
 
-const seat: SeatAnchor = { id: "sofa", type: "sofa_seat", gridPosition: { x: 5, y: 14 }, approachPosition: { x: 5, y: 13 }, seatedSpriteOffset: { x: 7, y: -18 }, facing: "north" };
+const seat: SeatAnchor = { id: "sofa", type: "sofa_seat", gridPosition: { x: 10, y: 20 }, approachPosition: { x: 10, y: 19 }, seatedSpriteOffset: { x: 7, y: -9 }, facing: "north" };
 describe("seat reservations", () => {
   it("prevents two agents from occupying the same seat and releases it", () => {
     const registry = new SeatRegistry();
@@ -11,7 +11,7 @@ describe("seat reservations", () => {
     registry.release(seat, "ana");
     expect(registry.occupy(seat, "bruno")).toBe(true);
   });
-  it("applies each seat offset to the visual anchor", () => expect(seatedWorldPosition(seat)).toEqual({ x: 487, y: 586 }));
+  it("applies each seat offset to the visual anchor", () => expect(seatedWorldPosition(seat)).toEqual({ x: 587, y: 771 }));
   it("keeps sofa positions independent", () => {
     const registry = new SeatRegistry(); const [left, center] = STATIC_SEATS.filter((item) => item.type === "sofa_seat");
     expect(registry.occupy(left, "ana")).toBe(true);

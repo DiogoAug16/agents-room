@@ -10,7 +10,7 @@ import { clearEdgeConnectedBackdrop } from "./alpha-mask";
 import { isValidStationCell } from "./station-layout";
 import { IdleBehaviorController, type IdleBehaviorType } from "./idle-behavior-controller";
 import { NavigationGrid } from "./maps/navigation-grid";
-import { homeSeatForAgent, IDLE_POINTS, MEETING_AREAS, STATIC_SEATS, staticObstacleKeys, type SeatAnchor } from "./maps/office-layout";
+import { homeSeatForAgent, IDLE_POINTS, MEETING_AREAS, STATIC_SEATS, staticObstacleKeys, WORKSTATION_CELLS, type SeatAnchor } from "./maps/office-layout";
 import { SeatRegistry, sameGridPoint, seatApproachWorldPosition, seatedWorldPosition } from "./maps/seats";
 
 type DrawnAgent = { body: Phaser.GameObjects.Container; station: Phaser.GameObjects.Container; sprite: Phaser.GameObjects.Sprite; status: Phaser.GameObjects.Arc; data: Agent; currentCell: Agent["position"]; seatId?: string; idleToken: number };
@@ -114,10 +114,10 @@ export class OfficeScene extends Phaser.Scene {
     let drawn = this.agents.get(agent.id);
     if (!drawn) {
       const shadow = this.add.ellipse(0, 5, 38, 12, 0x15202b, 0.28);
-      const sprite = this.add.sprite(0, 0, this.textureFor(agent)).setOrigin(0.5, 0.9).setScale(0.38);
-      const label = this.add.text(0, -108, agent.name, { fontFamily: "Inter, sans-serif", fontSize: "16px", color: "#f6f8fb", stroke: "#13202c", strokeThickness: 4 }).setOrigin(0.5);
-      const status = this.add.circle(31, -84, 5, this.statusColor(agent.status));
-      const container = this.add.container(screen.x, screen.y, [shadow, sprite, label, status]).setSize(76, 108).setInteractive({ useHandCursor: true });
+      const sprite = this.add.sprite(0, 0, this.textureFor(agent)).setOrigin(0.5, 0.9).setScale(0.52);
+      const label = this.add.text(0, -138, agent.name, { fontFamily: "Inter, sans-serif", fontSize: "16px", color: "#f6f8fb", stroke: "#13202c", strokeThickness: 4 }).setOrigin(0.5);
+      const status = this.add.circle(42, -108, 5, this.statusColor(agent.status));
+      const container = this.add.container(screen.x, screen.y, [shadow, sprite, label, status]).setSize(96, 136).setInteractive({ useHandCursor: true });
       const station = this.createStationMarker(agent);
       container.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
         pointer.event.stopPropagation();
@@ -176,7 +176,7 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   private isStationCellValid(agentId: string, cell: Agent["position"]) {
-    return this.navigation.canEnter({ x: cell.x, y: cell.y + 1 }, agentId) && isValidStationCell(cell, agentId, [...this.agents.values()].map(({ data }) => data), this.furnitureCells);
+    return WORKSTATION_CELLS.some((anchor) => sameGridPoint(anchor, cell)) && this.navigation.canEnter({ x: cell.x, y: cell.y + 1 }, agentId) && isValidStationCell(cell, agentId, [...this.agents.values()].map(({ data }) => data), this.furnitureCells);
   }
 
   private homeSeat(agent: Agent): SeatAnchor { return homeSeatForAgent(agent); }
