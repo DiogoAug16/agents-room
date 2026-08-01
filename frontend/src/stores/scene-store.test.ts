@@ -74,4 +74,12 @@ describe("furniture editor history", () => {
     store.rotateFurniture(chair.id);
     expect(useSceneStore.getState().furniture[2].orientation).toBe("south_east");
   });
+
+  it("creates a lounge with one sofa and two independent available seats", () => {
+    const store = useSceneStore.getState();
+    expect(store.createLoungePreset()).toBe(true);
+    const { furniture, furnitureGroups } = useSceneStore.getState();
+    expect(furniture.map((item) => item.assetId)).toEqual(["sofa.blue.01", "plant.floor.monstera.01"]);
+    expect(furnitureGroups[0]).toMatchObject({ groupType: "lounge", instanceIds: furniture.map((item) => item.id) });
+  });
 });

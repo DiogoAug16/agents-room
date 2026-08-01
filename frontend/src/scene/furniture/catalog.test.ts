@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FURNITURE_ASSETS, furnitureCells, furnitureImage, furnitureInteractionPoints, furnitureOrientations, furnitureSeat } from "./catalog";
+import { FURNITURE_ASSETS, furnitureCells, furnitureImage, furnitureInteractionPoints, furnitureOrientations, furnitureSeat, furnitureSeats } from "./catalog";
 
 describe("furniture catalog", () => {
   it("turns a furniture footprint into blocked grid cells", () => {
@@ -7,7 +7,7 @@ describe("furniture catalog", () => {
   });
 
   it("defines a front occlusion layer for every usable seat", () => {
-    expect(FURNITURE_ASSETS.filter((asset) => asset.seat).every((asset) => asset.frontOcclusionStart !== undefined)).toBe(true);
+    expect(FURNITURE_ASSETS.filter((asset) => furnitureSeats(asset).length).every((asset) => asset.frontOcclusionStart !== undefined)).toBe(true);
   });
 
   it("keeps every floor furniture asset out of the navigation grid", () => {
@@ -29,5 +29,10 @@ describe("furniture catalog", () => {
   it("calibrates chair seats by the selected orientation", () => {
     const chair = FURNITURE_ASSETS.find((asset) => asset.id === "chair.office.black.01")!;
     expect(furnitureSeat(chair, "south_east")).toMatchObject({ approach: { x: -1, y: 0 }, facing: "east", offset: { x: -2, y: -3 } });
+  });
+
+  it("keeps the two sofa seats independent", () => {
+    const sofa = FURNITURE_ASSETS.find((asset) => asset.id === "sofa.blue.01")!;
+    expect(furnitureSeats(sofa)).toMatchObject([{ id: "left", approach: { x: 0, y: 1 } }, { id: "right", approach: { x: 1, y: 1 } }]);
   });
 });

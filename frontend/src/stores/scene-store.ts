@@ -53,6 +53,7 @@ type SceneStore = {
   replaceOfficeLayout: (items: FurnitureInstance[], groups: FurnitureGroup[], assignments: AgentSeatAssignments) => void;
   assignAgentSeat: (agentId: string, seatInstanceId?: string) => void;
   createWorkstationPreset: (agentId: string, position: FurnitureInstance["position"]) => boolean;
+  createLoungePreset: () => boolean;
   clearFurniture: () => void;
   undoFurniture: () => void;
   redoFurniture: () => void;
@@ -135,6 +136,25 @@ export const useSceneStore = create<SceneStore>((set) => ({
       }
       created = true;
       return { furniture: [...state.furniture, ...additions], furnitureGroups: [...state.furnitureGroups, { id: groupId, name: `Estação ${agentId}`, instanceIds: additions.map((item) => item.id), groupType: "workstation" }], agentSeatAssignments: { ...state.agentSeatAssignments, [agentId]: chairId }, selectedFurnitureId: deskId, furniturePast: [...state.furniturePast, snapshot(state)], furnitureFuture: [] };
+    });
+    return created;
+  },
+  createLoungePreset: () => {
+    let created = false;
+    set((state) => {
+      const occupied = furnitureCells(state.furniture);
+      for (const position of [{ x: 8, y: 32 }, { x: 14, y: 30 }, { x: 5, y: 34 }]) {
+        const groupId = crypto.randomUUID(), sofaId = crypto.randomUUID(), plantId = crypto.randomUUID(), now = new Date().toISOString();
+        const additions: FurnitureInstance[] = [
+          { id: sofaId, assetId: "sofa.blue.01", position, orientation: "north_east", createdAt: now, groupId },
+          { id: plantId, assetId: "plant.floor.monstera.01", position: { x: position.x + 2, y: position.y }, orientation: "north_east", createdAt: now, groupId },
+        ];
+        const cells = additions.flatMap((item) => furnitureAsset(item.assetId)!.footprint.map((offset) => ({ x: item.position.x + offset.x, y: item.position.y + offset.y })));
+        if (!cells.every(isInsideEmptyRoomFloor) || cells.some((cell) => occupied.has(`${cell.x},${cell.y}`))) continue;
+        created = true;
+        return { furniture: [...state.furniture, ...additions], furnitureGroups: [...state.furnitureGroups, { id: groupId, name: "Lounge", instanceIds: additions.map((item) => item.id), groupType: "lounge" }], selectedFurnitureId: sofaId, furniturePast: [...state.furniturePast, snapshot(state)], furnitureFuture: [] };
+      }
+      return state;
     });
     return created;
   },

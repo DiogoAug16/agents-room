@@ -77,6 +77,14 @@ test("builds a grouped workstation for the selected agent", async ({ page }) => 
   await expect(page.getByRole("button", { name: /Planta de mesa.*1 na sala/ })).toBeVisible();
 });
 
+test("builds a lounge preset with a modular sofa", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Editar sala" }).click();
+  await page.getByRole("button", { name: "Montar lounge" }).click();
+  await expect(page.getByRole("button", { name: /Sofá azul.*1 na sala/ })).toBeVisible();
+  await expect(page.getByText("Lounge com dois assentos criado.")).toBeVisible();
+});
+
 test("opens the development asset calibration editor", async ({ page }) => {
   await page.goto("/dev/asset-editor");
   await expect(page.getByRole("heading", { name: "Cadeira executiva" })).toBeVisible();
