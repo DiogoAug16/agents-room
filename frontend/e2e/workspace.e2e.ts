@@ -28,8 +28,16 @@ test("validates agent creation and switches room modes", async ({ page }) => {
   await page.getByRole("button", { name: "Enviar ao Codex" }).click();
   const reject = page.getByRole("button", { name: "Rejeitar" });
   await expect(reject).toBeVisible();
+  await page.getByPlaceholder("Descreva uma tarefa…").fill("Segunda tarefa bloqueada.");
+  await page.getByRole("button", { name: "Enviar ao Codex" }).click();
+  await expect(page.getByRole("alert")).toHaveText("O agente já possui uma tarefa ativa.×");
   await reject.click();
   await expect(reject).toBeHidden();
+
+  await page.getByLabel("Agente de destino").selectOption({ label: "Bruno · Qualidade" });
+  await page.getByLabel("Resumo da interação").fill("Solicitando revisão E2E.");
+  await page.getByRole("button", { name: "Solicitar interação" }).click();
+  await expect(page.locator(".event-panel li").filter({ hasText: "Solicitando revisão E2E." }).first()).toBeVisible();
 
   await page.getByRole("button", { name: "Editar sala" }).click();
   await expect(page.getByText("Modo edição: arraste agentes para mover a estação")).toBeVisible();
