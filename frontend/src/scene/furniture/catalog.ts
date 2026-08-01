@@ -88,6 +88,14 @@ export const furnitureCells = (items: FurnitureInstance[]) => new Map(items.flat
   const asset = furnitureAsset(item.assetId); if (!asset) return [];
   return asset.footprint.map((offset) => [`${item.position.x + offset.x},${item.position.y + offset.y}`, item.id] as const);
 }));
+export const furnitureGroupCenter = (items: FurnitureInstance[], ids: Iterable<string>): GridPoint | undefined => {
+  const selected = new Set(ids);
+  const selectedItems = items.filter((item) => selected.has(item.id));
+  const points = selectedItems.flatMap((item) => (furnitureAsset(item.assetId)?.footprint ?? []).map((offset) => ({ x: item.position.x + offset.x, y: item.position.y + offset.y })));
+  if (!points.length) points.push(...selectedItems.map((item) => item.position));
+  if (!points.length) return undefined;
+  return { x: points.reduce((sum, point) => sum + point.x, 0) / points.length, y: points.reduce((sum, point) => sum + point.y, 0) / points.length };
+};
 export const furnitureInteractionPoints = (items: FurnitureInstance[]): FurnitureInteractionPoint[] => items.flatMap((item) => {
   const points = furnitureAsset(item.assetId)?.interactionPoints ?? [];
   return points.map((point) => ({ id: `furniture-${item.id}-${point.id}`, furnitureId: item.id, gridPosition: { x: item.position.x + point.offset.x, y: item.position.y + point.offset.y }, facing: point.facing, capacity: point.capacity, actionTypes: point.actionTypes }));
