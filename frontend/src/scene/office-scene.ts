@@ -12,7 +12,7 @@ import { IdleBehaviorController, type IdleBehaviorType } from "./idle-behavior-c
 import { NavigationGrid } from "./maps/navigation-grid";
 import { homeSeatForAgent, IDLE_POINTS, isInsideEmptyRoomFloor, MEETING_AREAS, STATIC_SEATS, staticObstacleKeys, WORKSTATION_CELLS, WORKSTATIONS, type SeatAnchor } from "./maps/office-layout";
 import { SeatRegistry, sameGridPoint, seatApproachWorldPosition, seatedWorldPosition } from "./maps/seats";
-import { FURNITURE_ASSETS, furnitureAsset, furnitureCells, furnitureImage, furnitureInteractionPoints, furnitureOrientations, furnitureTextureKey, type AgentSeatAssignments, type FurnitureInstance } from "./furniture/catalog";
+import { FURNITURE_ASSETS, furnitureAsset, furnitureCells, furnitureImage, furnitureInteractionPoints, furnitureOrientations, furnitureSeat, furnitureTextureKey, type AgentSeatAssignments, type FurnitureInstance } from "./furniture/catalog";
 
 type DrawnAgent = { body: Phaser.GameObjects.Container; station: Phaser.GameObjects.Container; sprite: Phaser.GameObjects.Sprite; status: Phaser.GameObjects.Arc; data: Agent; currentCell: Agent["position"]; seatId?: string; idleToken: number };
 type FurnitureLayers = { rear: Phaser.GameObjects.Sprite; front?: Phaser.GameObjects.Sprite };
@@ -155,10 +155,10 @@ export class OfficeScene extends Phaser.Scene {
 
   private modularHomeSeat(agent: Agent): SeatAnchor | undefined {
     const item = this.furnitureItems.find((value) => value.id === this.agentSeatAssignments[agent.id]);
-    const definition = item && furnitureAsset(item.assetId)?.seat;
+    const asset = item && furnitureAsset(item.assetId); const definition = asset && furnitureSeat(asset, item.orientation);
     if (!item || !definition) return undefined;
     return {
-      id: `furniture-${item.id}-seat`, type: furnitureAsset(item.assetId)!.category === "sofa" ? "sofa_seat" : "office_chair",
+      id: `furniture-${item.id}-seat`, type: asset!.category === "sofa" ? "sofa_seat" : "office_chair",
       gridPosition: { x: item.position.x + definition.anchor.x, y: item.position.y + definition.anchor.y },
       approachPosition: { x: item.position.x + definition.approach.x, y: item.position.y + definition.approach.y },
       seatedSpriteOffset: definition.offset, facing: definition.facing, workstationId: item.id, ownerAgentId: agent.id, depthOffset: -2,

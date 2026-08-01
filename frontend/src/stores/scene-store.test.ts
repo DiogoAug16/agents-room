@@ -69,5 +69,9 @@ describe("furniture editor history", () => {
     const water = useSceneStore.getState().furniture[1];
     store.rotateFurniture(water.id);
     expect(useSceneStore.getState().furniture[1].orientation).toBe("north_east");
+    store.addFurniture("chair.office.black.01", { x: 14, y: 20 });
+    const chair = useSceneStore.getState().furniture[2];
+    store.rotateFurniture(chair.id);
+    expect(useSceneStore.getState().furniture[2].orientation).toBe("south_east");
   });
 });

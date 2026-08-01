@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FURNITURE_ASSETS, furnitureCells, furnitureImage, furnitureInteractionPoints, furnitureOrientations } from "./catalog";
+import { FURNITURE_ASSETS, furnitureCells, furnitureImage, furnitureInteractionPoints, furnitureOrientations, furnitureSeat } from "./catalog";
 
 describe("furniture catalog", () => {
   it("turns a furniture footprint into blocked grid cells", () => {
@@ -24,5 +24,10 @@ describe("furniture catalog", () => {
     const desk = FURNITURE_ASSETS.find((asset) => asset.id === "desk.work.light.01")!;
     expect(furnitureOrientations(desk)).toEqual(["north_west", "south_west"]);
     expect(furnitureImage(desk, "south_west")).toContain("desk-work-light-sw-01.png");
+  });
+
+  it("calibrates chair seats by the selected orientation", () => {
+    const chair = FURNITURE_ASSETS.find((asset) => asset.id === "chair.office.black.01")!;
+    expect(furnitureSeat(chair, "south_east")).toMatchObject({ approach: { x: -1, y: 0 }, facing: "east", offset: { x: -2, y: -3 } });
   });
 });
