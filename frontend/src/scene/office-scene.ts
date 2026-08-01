@@ -211,7 +211,7 @@ export class OfficeScene extends Phaser.Scene {
       if (!layers) {
         const origin = furnitureOrigin(asset, item.orientation);
         const rear = this.add.sprite(screen.x, screen.y, texture).setOrigin(origin.x, origin.y).setScale(asset.defaultScale ?? 0.75);
-        if (!item.parentId) rear.setInteractive({ useHandCursor: true }).on("pointerdown", (pointer: Phaser.Input.Pointer) => { pointer.event.stopPropagation(); if (this.editMode) { const source = pointer.event as MouseEvent; const additive = source.ctrlKey || source.metaKey || source.shiftKey; if (!additive) this.furnitureDrag = item.id; window.dispatchEvent(new CustomEvent("furniture:select", { detail: { id: item.id, additive } })); } });
+        if (!item.parentId) rear.setInteractive({ useHandCursor: true }).on("pointerdown", (pointer: Phaser.Input.Pointer) => { pointer.event.stopPropagation(); if (this.editMode) { const source = pointer.event as MouseEvent; const additive = source.ctrlKey || source.metaKey || source.shiftKey; if (additive) { window.dispatchEvent(new CustomEvent("furniture:select", { detail: { id: item.id, additive: true } })); return; } this.furnitureDrag = item.id; if (!this.selectedFurnitureIds.has(item.id)) window.dispatchEvent(new CustomEvent("furniture:select", { detail: { id: item.id } })); } });
         const frontCropStart = asset.frontOcclusionStart;
         const front = frontCropStart === undefined ? undefined : this.add.sprite(screen.x, screen.y, texture).setOrigin(origin.x, origin.y).setScale(asset.defaultScale ?? 0.75);
         layers = { rear, front }; this.furnitureSprites.set(item.id, layers);
@@ -300,13 +300,17 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   private movingFurniture(id: string) {
-    const ids = linkedFurnitureIds(this.furnitureItems, id);
+    const ids = this.movingFurnitureIds(id);
     return this.furnitureItems.filter((item) => ids.has(item.id));
   }
 
+  private movingFurnitureIds(id: string) {
+    return this.selectedFurnitureIds.has(id) ? new Set([...this.selectedFurnitureIds].flatMap((selectedId) => [...linkedFurnitureIds(this.furnitureItems, selectedId)])) : linkedFurnitureIds(this.furnitureItems, id);
+  }
+
   private furnitureMoveState(id: string, position: Agent["position"]): PlacementState {
-    const candidate = movedFurnitureInstances(this.furnitureItems, id, position); if (!candidate) return "collision";
-    const movingIds = linkedFurnitureIds(this.furnitureItems, id);
+    const movingIds = this.movingFurnitureIds(id);
+    const candidate = movedFurnitureInstances(this.furnitureItems, id, position, movingIds); if (!candidate) return "collision";
     const occupied = furnitureCells(this.furnitureItems.filter((item) => !movingIds.has(item.id)));
     const cells = candidate.filter((item) => movingIds.has(item.id)).flatMap((item) => furnitureAsset(item.assetId)!.footprint.map((offset) => ({ x: item.position.x + offset.x, y: item.position.y + offset.y })));
     if (!cells.every(isInsideEmptyRoomFloor) || cells.some((cell) => occupied.has(`${cell.x},${cell.y}`)) || cells.some((cell, index) => cells.findIndex((other) => sameGridPoint(other, cell)) !== index) || cells.some((cell) => [...this.agents.values()].some((agent) => sameGridPoint(agent.currentCell, cell)))) return "collision";

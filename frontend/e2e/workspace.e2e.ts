@@ -82,6 +82,10 @@ test("builds a grouped workstation for the selected agent", async ({ page }) => 
   await expect(deleteDialog.getByRole("heading", { name: "Remover móvel em uso?" })).toBeVisible();
   await expect(deleteDialog).toContainText("perderá a estação ou assento associado.");
   await deleteDialog.getByRole("button", { name: "Cancelar" }).click();
+  const ungroup = page.getByRole("button", { name: "Desagrupar" });
+  await expect(ungroup).toBeEnabled();
+  await ungroup.click();
+  await expect(ungroup).toBeDisabled();
   const rotate = page.getByRole("button", { name: "Rotacionar" });
   await expect(rotate).toBeEnabled();
   await rotate.click();

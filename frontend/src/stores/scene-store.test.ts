@@ -102,6 +102,22 @@ describe("furniture editor history", () => {
     expect(furniture.every((item) => item.groupId === furnitureGroups[0].id)).toBe(true);
   });
 
+  it("ungroups selected furniture and moves the preserved multi-selection together", () => {
+    const store = useSceneStore.getState();
+    store.addFurniture("chair.office.black.01", { x: 10, y: 20 });
+    store.addFurniture("water.dispenser.01", { x: 14, y: 20 });
+    const [chair, dispenser] = useSceneStore.getState().furniture;
+    store.selectFurniture(chair.id);
+    store.selectFurniture(dispenser.id, true);
+    store.groupSelectedFurniture();
+    store.ungroupSelectedFurniture();
+    expect(useSceneStore.getState().furnitureGroups).toEqual([]);
+    expect(useSceneStore.getState().furniture.every((item) => !item.groupId)).toBe(true);
+    expect(useSceneStore.getState().selectedFurnitureIds).toEqual([chair.id, dispenser.id]);
+    store.moveFurniture(chair.id, { x: 11, y: 21 });
+    expect(useSceneStore.getState().furniture.map((item) => item.position)).toEqual([{ x: 11, y: 21 }, { x: 15, y: 21 }]);
+  });
+
   it("rotates only furniture with a supplied visual variant", () => {
     const store = useSceneStore.getState();
     store.addFurniture("desk.work.light.01", { x: 10, y: 20 });

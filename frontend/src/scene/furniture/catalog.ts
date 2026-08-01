@@ -65,9 +65,9 @@ export const linkedFurnitureIds = (items: FurnitureInstance[], id: string) => {
   }
   return ids;
 };
-export const movedFurnitureInstances = (items: FurnitureInstance[], id: string, position: GridPoint) => {
+export const movedFurnitureInstances = (items: FurnitureInstance[], id: string, position: GridPoint, ids = linkedFurnitureIds(items, id)) => {
   const pivot = items.find((item) => item.id === id); if (!pivot) return undefined;
-  const ids = linkedFurnitureIds(items, id); const delta = { x: position.x - pivot.position.x, y: position.y - pivot.position.y };
+  const delta = { x: position.x - pivot.position.x, y: position.y - pivot.position.y };
   return items.map((item) => ids.has(item.id) ? { ...item, position: { x: item.position.x + delta.x, y: item.position.y + delta.y } } : item);
 };
 export const removableFurnitureIds = linkedFurnitureIds;
