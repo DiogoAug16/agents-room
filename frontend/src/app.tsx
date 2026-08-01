@@ -12,9 +12,9 @@ import { skills, useSceneStore } from "./stores/scene-store";
 const agentSchema = z.object({ name: z.string().trim().min(2, "Informe ao menos 2 caracteres"), role: z.string().trim().min(2, "Informe uma função") });
 type AgentForm = z.infer<typeof agentSchema>;
 
-function DraggableSkill({ skillId, label }: { skillId: string; label: string }) {
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: skillId });
-  return <button ref={setNodeRef} className="skill-card" style={{ transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined, opacity: isDragging ? 0.45 : 1 }} {...listeners} {...attributes}><span>{label}</span><small>{skills.find((skill) => skill.id === skillId)?.description}</small></button>;
+function DraggableSkill({ skillId, label, disabled, onAssign }: { skillId: string; label: string; disabled: boolean; onAssign: (skillId: string) => void }) {
+  const { attributes, listeners, setActivatorNodeRef, setNodeRef, transform, isDragging } = useDraggable({ id: skillId, disabled });
+  return <div ref={setNodeRef} className="skill-card skill-dnd-card" style={{ transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined, opacity: isDragging ? 0.45 : 1 }}><button className="skill-assign" disabled={disabled} onClick={() => onAssign(skillId)}><span>{label}</span><small>{skills.find((skill) => skill.id === skillId)?.description}</small></button><button ref={setActivatorNodeRef} className="skill-drag" disabled={disabled} aria-label={`Arrastar ${label}`} {...listeners} {...attributes}>↕</button></div>;
 }
 
 function SkillDropZone({ children }: { children: ReactNode }) {
@@ -96,12 +96,16 @@ export function App() {
     return () => { window.removeEventListener("interaction:started", started); window.removeEventListener("interaction:completed", completed); window.removeEventListener("interaction:failed", failed); };
   }, []);
 
-  const onDragEnd = ({ active, over }: DragEndEvent) => {
-    if (!selectedId || (over?.id !== "selected-agent" && over?.id !== "scene")) return;
-    assignSkill(selectedId, String(active.id));
-    const skill = skills.find((item) => item.id === active.id);
+  const assignSkillToSelected = (skillId: string) => {
+    if (!selectedId || !selected) return;
+    assignSkill(selectedId, skillId);
+    const skill = skills.find((item) => item.id === skillId);
     setEvents((items) => [`${skill?.name} atribuída a ${selected?.name}.`, ...items].slice(0, 10));
-    void api.assignSkill(selectedId, String(active.id)).then(invalidateAgents).catch(() => setEvents((items) => ["Skill já atribuída ou backend indisponível.", ...items].slice(0, 10)));
+    void api.assignSkill(selectedId, skillId).then(invalidateAgents).catch(() => { void invalidateAgents(); setEvents((items) => ["Skill já atribuída ou backend indisponível.", ...items].slice(0, 10)); });
+  };
+  const onDragEnd = ({ active, over }: DragEndEvent) => {
+    if (over?.id !== "selected-agent" && over?.id !== "scene") return;
+    assignSkillToSelected(String(active.id));
   };
   const sendTask = () => {
     if (!selected || !task.trim()) return;
@@ -148,9 +152,9 @@ export function App() {
   const cancelTask = (taskId: string) => void api.cancelTask(taskId).then(invalidateTasks);
 
   return <DndContext onDragEnd={onDragEnd}><main className="app-shell">
-    <header className="topbar"><div className="brand"><span className="brand-mark">AR</span><div><strong>Agents Room</strong><small>workspace local</small></div></div><div className="workspace-meta"><span>Projeto: agents-room</span><span>Branch: {workspaceQuery.data?.gitBranch ?? "sem Git"}</span><span className={workspaceQuery.data ? "codex-online" : "codex-offline"}>● {workspaceQuery.data ? "Codex disponível" : "Backend desconectado"}</span><span>{agents.length}/8 agentes</span></div><div className="topbar-actions"><button className={editMode ? "button active" : "button"} onClick={toggleEdit}>{editMode ? "Concluir edição" : "Editar sala"}</button><AddAgentDialog onCreate={createAgent} /></div></header>
+    <header className="topbar"><div className="brand"><span className="brand-mark">AR</span><div><strong>Agents Room</strong><small>workspace local</small></div></div><div className="workspace-meta"><span>Projeto: agents-room</span><span>Branch: {workspaceQuery.data?.gitBranch ?? "sem Git"}</span><span className={workspaceQuery.data ? "codex-online" : "codex-offline"}>● {workspaceQuery.data ? "Codex disponível" : "Backend desconectado"}</span><span>{agents.length}/8 agentes</span></div><div className="topbar-actions"><label className="agent-selector"><span>Agente</span><select aria-label="Agente selecionado" value={selectedId ?? ""} onChange={(event) => select(event.target.value || undefined)}><option value="" disabled>Selecionar</option>{agents.map((agent) => <option key={agent.id} value={agent.id}>{agent.name} · {agent.role}</option>)}</select></label><button className={editMode ? "button active" : "button"} onClick={toggleEdit}>{editMode ? "Concluir edição" : "Editar sala"}</button><AddAgentDialog onCreate={createAgent} /></div></header>
     <section className="workspace-grid">
-      <aside className="catalog panel"><div className="panel-heading"><h2>Catálogo</h2><input aria-label="Buscar skills" placeholder="Buscar skill" /></div><p className="section-label">SKILLS LOCAIS</p>{skills.map((skill) => <DraggableSkill key={skill.id} skillId={skill.id} label={skill.name} />)}<p className="section-label">PLUGINS</p>{pluginsQuery.data?.length ? pluginsQuery.data.map((plugin) => <button key={plugin.id} className="skill-card" onClick={() => assignPlugin(plugin.id)} disabled={!selected}><span>+ {plugin.name}</span><small>{plugin.description}</small></button>) : <div className="empty-plugin">Nenhum plugin disponível.</div>}</aside>
+      <aside className="catalog panel"><div className="panel-heading"><h2>Catálogo</h2><input aria-label="Buscar skills" placeholder="Buscar skill" /></div><p className="section-label">SKILLS LOCAIS</p>{skills.map((skill) => <DraggableSkill key={skill.id} skillId={skill.id} label={skill.name} disabled={!selected} onAssign={assignSkillToSelected} />)}<p className="section-label">PLUGINS</p>{pluginsQuery.data?.length ? pluginsQuery.data.map((plugin) => <button key={plugin.id} className="skill-card" onClick={() => assignPlugin(plugin.id)} disabled={!selected}><span>+ {plugin.name}</span><small>{plugin.description}</small></button>) : <div className="empty-plugin">Nenhum plugin disponível.</div>}</aside>
       <section className="scene-wrap"><div className="scene-toolbar"><span className={editMode ? "mode edit" : "mode"}>{editMode ? "Modo edição: arraste agentes para mover a estação" : "Modo operação"}</span><span>Scroll: zoom · arraste o fundo: câmera · F: foco · Esc: limpar</span></div><SceneDrop><OfficeCanvas /></SceneDrop></section>
       <aside className="inspector panel"><div className="panel-heading"><h2>Inspector</h2><span className="status-dot" /></div>{selected ? <><div className="agent-title"><span className="avatar" style={{ background: `#${selected.color.toString(16)}` }}>{selected.name[0]}</span><div><h3>{selected.name}</h3><p>{selected.role}</p></div></div><p className="description">{selected.description}</p><dl className="details"><div><dt>Estado</dt><dd>{selected.status}</dd></div><div><dt>Posição</dt><dd>{selected.position.x}, {selected.position.y}</dd></div><div><dt>Sessão</dt><dd>criada na POC</dd></div></dl><p className="section-label">SKILLS</p><SkillDropZone>{selected.skillStates.length ? selected.skillStates.map(({ id, enabled }) => <span key={id} className={enabled ? "skill-chip" : "skill-chip disabled"}>{skills.find((skill) => skill.id === id)?.name}<button onClick={() => updateSkill(id, !enabled)}>{enabled ? "Pausar" : "Ativar"}</button><button onClick={() => removeSkill(id)} aria-label={`Remover ${skills.find((skill) => skill.id === id)?.name}`}>×</button></span>) : <span className="empty">Arraste uma skill aqui</span>}</SkillDropZone><p className="section-label">PLUGINS</p><div className="skill-list">{selected.pluginStates.length ? selected.pluginStates.map(({ id, name, enabled }) => <span key={id} className={enabled ? "skill-chip" : "skill-chip disabled"}>{name}<button onClick={() => updatePlugin(id, !enabled)}>{enabled ? "Pausar" : "Ativar"}</button><button onClick={() => removePlugin(id)} aria-label={`Remover ${name}`}>×</button></span>) : <span className="empty">Nenhum plugin atribuído</span>}</div><p className="section-label">ENVIAR TAREFA</p><textarea value={task} onChange={(event) => setTaskDraft(event.target.value)} placeholder="Descreva uma tarefa…" /><button className="primary full" onClick={sendTask}>Enviar ao Codex</button>{selected.task && <p className="task-current">Em execução: {selected.task}</p>}<button className="danger-link" onClick={deleteSelected}>Remover agente</button></> : <div className="empty-inspector">Selecione um agente na sala.</div>}</aside>
     </section>

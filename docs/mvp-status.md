@@ -1,6 +1,6 @@
 # Status do MVP
 
-Atualizado em 2026-07-31 após o primeiro fluxo E2E web.
+Atualizado em 2026-07-31 após acessibilidade de seleção e E2E de operação.
 
 As sete fases abaixo agrupam os 24 passos da ordem de implementação original.
 
@@ -12,12 +12,12 @@ As sete fases abaixo agrupam os 24 passos da ordem de implementação original.
 | 3. Estado persistido | parcial | SQLite, Alembic, agentes, posição-base, pontos de interação e validação visual da estação persistem. O cenário ainda é uma ilustração estática, portanto móveis de fundo não são removidos visualmente ao mover uma estação. |
 | 4. Operação | em andamento | Skills e plugins podem atribuir, pausar e remover; tarefas, WebSocket, histórico e aprovações existem. Faltam busca/filtros reais e plugins com manifestos completos. |
 | 5. Colaboração segura | concluída | Interação visual, retorno, delegação pai-filho, limite de profundidade 2, quatro subtarefas por tarefa, prevenção de ciclos, timeout de 10 minutos, aprovação e cancelamento em cascata persistido existem. |
-| 6. Fechamento web | em andamento | Playwright valida formulário, criação persistida de agente e os modos operação/edição contra FastAPI e Vite reais. Faltam seleção acessível de agentes, fluxos E2E de skills/tarefas e falhas visuais. |
+| 6. Fechamento web | em andamento | Seleção de agente por teclado, foco visível e Playwright cobrem formulário, skills por clique/arraste, tarefa com aprovação e modos operação/edição contra FastAPI e Vite reais. Faltam estados visuais de falha e cobertura de interações. |
 | 7. Desktop | concluída para desenvolvimento | Electron inicia e encerra o backend em localhost. Empacotador distribuível fica para a release. |
 
 ## Estimativa do MVP
 
-Cobertura funcional atual: aproximadamente 80% dos critérios de aceitação. As lacunas que ainda impedem o fechamento são concentradas em dois pacotes:
+Cobertura funcional atual: aproximadamente 83% dos critérios de aceitação. As lacunas que ainda impedem o fechamento são concentradas em dois pacotes:
 
 1. Edição de estação: mover mesa, cadeira, computador, ponto-base e pontos de interação como um grupo, com validação visual.
 2. Fechamento: ampliar E2E, acessibilidade, estados de falha e empacotamento de distribuição.
