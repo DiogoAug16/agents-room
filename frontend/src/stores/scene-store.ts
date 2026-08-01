@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import type { Agent } from "../types";
-import { defaultFurnitureOrientation, furnitureAsset, furnitureCells, furnitureOrientations, movedFurnitureInstances, type AgentSeatAssignments, type FurnitureGroup, type FurnitureInstance, type FurnitureOrientation } from "../scene/furniture/catalog";
+import { defaultFurnitureOrientation, furnitureAsset, furnitureCells, furnitureOrientations, movedFurnitureInstances, removableFurnitureIds, type AgentSeatAssignments, type FurnitureGroup, type FurnitureInstance, type FurnitureOrientation } from "../scene/furniture/catalog";
 import { isInsideEmptyRoomFloor } from "../scene/maps/office-layout";
 
 type LayoutSnapshot = { furniture: FurnitureInstance[]; furnitureGroups: FurnitureGroup[]; agentSeatAssignments: AgentSeatAssignments };
@@ -10,16 +10,6 @@ const initialAgents: Agent[] = [
   { id: "ana", name: "Ana", role: "Engenharia", description: "Implementa e revisa serviços.", color: 0x5ca6d8, status: "working", direction: "north", position: { x: 10, y: 23 }, basePosition: { x: 10, y: 23 }, skills: ["fastapi"], skillStates: [{ id: "fastapi", enabled: true }], pluginStates: [], task: "Validando adapter Codex" },
   { id: "bruno", name: "Bruno", role: "Qualidade", description: "Cria testes e avalia mudanças.", color: 0xd18b64, status: "seated", direction: "west", position: { x: 10, y: 14 }, basePosition: { x: 10, y: 14 }, skills: ["testing"], skillStates: [{ id: "testing", enabled: true }], pluginStates: [] },
 ];
-
-function removalIds(furniture: FurnitureInstance[], id: string) {
-  const ids = new Set([id]);
-  let changed = true;
-  while (changed) {
-    changed = false;
-    furniture.filter((item) => item.parentId && ids.has(item.parentId) && !ids.has(item.id)).forEach((item) => { ids.add(item.id); changed = true; });
-  }
-  return ids;
-}
 
 type SceneStore = {
   agents: Agent[];
@@ -45,6 +35,7 @@ type SceneStore = {
   rotateFurniturePlacement: () => void;
   cancelFurniturePlacement: () => void;
   addSurfaceFurniture: (assetId: string, hostId?: string) => boolean;
+  duplicateFurniture: (id: string, position: FurnitureInstance["position"]) => void;
   moveFurniture: (id: string, position: FurnitureInstance["position"]) => void;
   removeFurniture: (id: string) => void;
   rotateFurniture: (id: string) => void;
@@ -115,12 +106,17 @@ export const useSceneStore = create<SceneStore>((set) => ({
     });
     return added;
   },
+  duplicateFurniture: (id, position) => set((state) => {
+    const source = state.furniture.find((item) => item.id === id); if (!source) return state;
+    const clone: FurnitureInstance = { ...source, id: crypto.randomUUID(), position, createdAt: new Date().toISOString(), groupId: undefined, parentId: undefined, surfaceOffset: undefined };
+    return { furniture: [...state.furniture, clone], selectedFurnitureId: clone.id, furniturePast: [...state.furniturePast, snapshot(state)], furnitureFuture: [] };
+  }),
   moveFurniture: (id, position) => set((state) => {
     const furniture = movedFurnitureInstances(state.furniture, id, position); if (!furniture) return state;
     return { furniture, furniturePast: [...state.furniturePast, snapshot(state)], furnitureFuture: [] };
   }),
   removeFurniture: (id) => set((state) => {
-    const ids = removalIds(state.furniture, id);
+    const ids = removableFurnitureIds(state.furniture, id);
     const agentSeatAssignments = Object.fromEntries(Object.entries(state.agentSeatAssignments).filter(([, seatId]) => !ids.has(seatId)));
     return { furniture: state.furniture.filter((item) => !ids.has(item.id)), furnitureGroups: state.furnitureGroups.map((group) => ({ ...group, instanceIds: group.instanceIds.filter((itemId) => !ids.has(itemId)) })).filter((group) => group.instanceIds.length), agentSeatAssignments, selectedFurnitureId: state.selectedFurnitureId && ids.has(state.selectedFurnitureId) ? undefined : state.selectedFurnitureId, furniturePast: [...state.furniturePast, snapshot(state)], furnitureFuture: [] };
   }),

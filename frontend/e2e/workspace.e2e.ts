@@ -77,9 +77,16 @@ test("builds a grouped workstation for the selected agent", async ({ page }) => 
   const chair = page.getByLabel("Cadeira principal");
   await expect(chair.locator("option")).toHaveCount(2);
   await expect(chair).not.toHaveValue("");
+  await page.getByRole("button", { name: "Excluir" }).click();
+  const deleteDialog = page.getByRole("dialog");
+  await expect(deleteDialog.getByRole("heading", { name: "Remover móvel em uso?" })).toBeVisible();
+  await expect(deleteDialog).toContainText("perderá a estação ou assento associado.");
+  await deleteDialog.getByRole("button", { name: "Cancelar" }).click();
   const rotate = page.getByRole("button", { name: "Rotacionar" });
   await expect(rotate).toBeEnabled();
   await rotate.click();
+  await page.getByRole("button", { name: "Duplicar" }).click();
+  await expect(page.getByRole("button", { name: /Mesa de trabalho.*2 na sala/ })).toBeVisible();
   await page.getByRole("button", { name: /Planta de mesa/ }).click();
   await expect(page.getByRole("button", { name: /Planta de mesa.*1 na sala/ })).toBeVisible();
 });

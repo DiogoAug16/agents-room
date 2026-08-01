@@ -13,7 +13,7 @@ import { NavigationGrid } from "./maps/navigation-grid";
 import { preservesNavigationRoutes } from "./maps/connectivity";
 import { homeSeatForAgent, IDLE_POINTS, isInsideEmptyRoomFloor, MEETING_AREAS, STATIC_SEATS, staticObstacleKeys, WORKSTATION_CELLS, WORKSTATIONS, type SeatAnchor } from "./maps/office-layout";
 import { SeatRegistry, sameGridPoint, seatApproachWorldPosition, seatedWorldPosition } from "./maps/seats";
-import { FURNITURE_ASSETS, defaultFurnitureOrientation, furnitureAsset, furnitureCells, furnitureImage, furnitureInteractionPoints, furnitureOrientations, furnitureOrigin, furnitureSeat, furnitureSeats, furnitureTextureKey, linkedFurnitureIds, movedFurnitureInstances, type AgentSeatAssignments, type FurnitureInstance, type FurnitureOrientation } from "./furniture/catalog";
+import { FURNITURE_ASSETS, defaultFurnitureOrientation, furnitureAsset, furnitureCells, furnitureImage, furnitureInteractionPoints, furnitureOrientations, furnitureOrigin, furnitureSeat, furnitureSeats, furnitureTextureKey, linkedFurnitureIds, movedFurnitureInstances, removableFurnitureIds, type AgentSeatAssignments, type FurnitureInstance, type FurnitureOrientation } from "./furniture/catalog";
 
 type DrawnAgent = { body: Phaser.GameObjects.Container; station: Phaser.GameObjects.Container; sprite: Phaser.GameObjects.Sprite; status: Phaser.GameObjects.Arc; data: Agent; currentCell: Agent["position"]; seatId?: string; idleToken: number };
 type FurnitureLayers = { rear: Phaser.GameObjects.Sprite; front?: Phaser.GameObjects.Sprite };
@@ -90,6 +90,9 @@ export class OfficeScene extends Phaser.Scene {
     sceneEvents.addEventListener("agents", this.sync as EventListener);
     sceneEvents.addEventListener("interaction", this.interact as EventListener);
     window.addEventListener("furniture:rotate-request", this.rotateFurnitureRequest as EventListener);
+    window.addEventListener("furniture:duplicate-request", this.duplicateFurnitureRequest as EventListener);
+    window.addEventListener("furniture:delete-request", this.deleteFurnitureRequest as EventListener);
+    window.addEventListener("furniture:delete-force", this.deleteFurnitureForce as EventListener);
     this.sync(new CustomEvent("agents", { detail: { agents: useSceneStore.getState().agents, editMode: useSceneStore.getState().editMode, furniture: useSceneStore.getState().furniture, agentSeatAssignments: useSceneStore.getState().agentSeatAssignments, placingFurnitureAssetId: useSceneStore.getState().placingFurnitureAssetId, placingFurnitureOrientation: useSceneStore.getState().placingFurnitureOrientation } }));
     this.input.keyboard?.on("keydown-F", () => this.focusSelected());
     this.input.keyboard?.on("keydown-ESC", () => { if (this.placingFurnitureAssetId) window.dispatchEvent(new Event("furniture:cancel-placement")); else window.dispatchEvent(new Event("agent:deselect")); });
@@ -97,7 +100,7 @@ export class OfficeScene extends Phaser.Scene {
     if (import.meta.env.DEV) this.input.keyboard?.on("keydown-N", () => this.toggleNavigationDebug());
   }
 
-  shutdown() { this.idleController.cancelAll(); sceneEvents.removeEventListener("agents", this.sync as EventListener); sceneEvents.removeEventListener("interaction", this.interact as EventListener); window.removeEventListener("furniture:rotate-request", this.rotateFurnitureRequest as EventListener); }
+  shutdown() { this.idleController.cancelAll(); sceneEvents.removeEventListener("agents", this.sync as EventListener); sceneEvents.removeEventListener("interaction", this.interact as EventListener); window.removeEventListener("furniture:rotate-request", this.rotateFurnitureRequest as EventListener); window.removeEventListener("furniture:duplicate-request", this.duplicateFurnitureRequest as EventListener); window.removeEventListener("furniture:delete-request", this.deleteFurnitureRequest as EventListener); window.removeEventListener("furniture:delete-force", this.deleteFurnitureForce as EventListener); }
 
   private drawGrid() {
     const graphics = this.add.graphics().setDepth(-50).setAlpha(0.48).setVisible(false);
@@ -320,6 +323,32 @@ export class OfficeScene extends Phaser.Scene {
     const candidate = this.furnitureItems.map((value) => value.id === id ? { ...value, orientation } : value);
     if (!this.preservesFurnitureRoutes(candidate)) { window.dispatchEvent(new Event("furniture:route-blocked")); return; }
     window.dispatchEvent(new CustomEvent("furniture:rotate", { detail: id }));
+  };
+
+  private duplicateFurnitureRequest = (event: Event) => {
+    const id = (event as CustomEvent<string>).detail; const item = this.furnitureItems.find((value) => value.id === id); if (!item) return;
+    const position = { x: item.position.x + 2, y: item.position.y + 2 };
+    const state = this.newFurniturePlacementState(item.assetId, position);
+    if (state !== "valid") { window.dispatchEvent(new Event(state === "blocks_route" ? "furniture:route-blocked" : "furniture:invalid")); return; }
+    window.dispatchEvent(new CustomEvent("furniture:duplicate", { detail: { id, position } }));
+  };
+
+  private affectedAgentsForFurniture(ids: Set<string>) {
+    const cells = furnitureCells(this.furnitureItems.filter((item) => ids.has(item.id)));
+    return [...this.agents.values()].filter((agent) => ids.has(this.agentSeatAssignments[agent.data.id] ?? "") || [...ids].some((itemId) => agent.seatId === `furniture-${itemId}-seat` || agent.seatId?.startsWith(`furniture-${itemId}-`)) || cells.has(`${agent.currentCell.x},${agent.currentCell.y}`));
+  }
+
+  private deleteFurnitureRequest = (event: Event) => {
+    const id = (event as CustomEvent<string>).detail; const ids = removableFurnitureIds(this.furnitureItems, id); if (!ids.size) return;
+    const affected = this.affectedAgentsForFurniture(ids);
+    if (affected.length) { window.dispatchEvent(new CustomEvent("furniture:delete-confirmation", { detail: { id, agentNames: affected.map((agent) => agent.data.name) } })); return; }
+    window.dispatchEvent(new CustomEvent("furniture:delete", { detail: id }));
+  };
+
+  private deleteFurnitureForce = (event: Event) => {
+    const id = (event as CustomEvent<string>).detail; const ids = removableFurnitureIds(this.furnitureItems, id);
+    this.affectedAgentsForFurniture(ids).forEach((agent) => { this.idleController.cancelBehavior(agent.data.id); this.leaveSeatForWalking(agent); });
+    window.dispatchEvent(new CustomEvent("furniture:delete", { detail: id }));
   };
 
   private furnitureScreenPosition(item: FurnitureInstance, delta = { x: 0, y: 0 }) {

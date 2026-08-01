@@ -70,6 +70,7 @@ export const movedFurnitureInstances = (items: FurnitureInstance[], id: string, 
   const ids = linkedFurnitureIds(items, id); const delta = { x: position.x - pivot.position.x, y: position.y - pivot.position.y };
   return items.map((item) => ids.has(item.id) ? { ...item, position: { x: item.position.x + delta.x, y: item.position.y + delta.y } } : item);
 };
+export const removableFurnitureIds = linkedFurnitureIds;
 export const furnitureCells = (items: FurnitureInstance[]) => new Map(items.flatMap((item) => {
   const asset = furnitureAsset(item.assetId); if (!asset) return [];
   return asset.footprint.map((offset) => [`${item.position.x + offset.x},${item.position.y + offset.y}`, item.id] as const);

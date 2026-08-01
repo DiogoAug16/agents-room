@@ -77,6 +77,17 @@ describe("furniture editor history", () => {
     expect(useSceneStore.getState().furniture).toEqual([]);
   });
 
+  it("duplicates a selected furniture item as an independent instance", () => {
+    const store = useSceneStore.getState();
+    store.addFurniture("chair.office.black.01", { x: 10, y: 20 });
+    const chair = useSceneStore.getState().furniture[0];
+    store.rotateFurniture(chair.id);
+    store.duplicateFurniture(chair.id, { x: 12, y: 22 });
+    const [source, copy] = useSceneStore.getState().furniture;
+    expect(copy).toMatchObject({ assetId: source.assetId, position: { x: 12, y: 22 }, orientation: "south_east" });
+    expect(copy.id).not.toBe(source.id);
+  });
+
   it("rotates only furniture with a supplied visual variant", () => {
     const store = useSceneStore.getState();
     store.addFurniture("desk.work.light.01", { x: 10, y: 20 });
