@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { furnitureCells } from "../scene/furniture/catalog";
 import { useSceneStore } from "./scene-store";
 
 describe("furniture editor history", () => {
@@ -30,8 +31,30 @@ describe("furniture editor history", () => {
     expect(furniture.map((item) => item.assetId)).toEqual(["desk.work.light.01", "chair.office.black.01", "monitor.black.01"]);
     expect(furnitureGroups[0].instanceIds).toHaveLength(3);
     expect(agentSeatAssignments.ana).toBe(furniture.find((item) => item.assetId === "chair.office.black.01")?.id);
+    expect(useSceneStore.getState().selectedFurnitureId).toBe(furniture.find((item) => item.assetId === "desk.work.light.01")?.id);
     const chair = furniture.find((item) => item.assetId === "chair.office.black.01")!;
     store.moveFurniture(chair.id, { x: 11, y: 24 });
     expect(useSceneStore.getState().furniture.map((item) => item.position)).toEqual([{ x: 11, y: 22 }, { x: 11, y: 24 }, { x: 11, y: 22 }]);
+  });
+
+  it("attaches surface objects to a desk without creating floor collision", () => {
+    const store = useSceneStore.getState();
+    store.addFurniture("desk.work.light.01", { x: 10, y: 20 });
+    const desk = useSceneStore.getState().furniture[0];
+    expect(store.addSurfaceFurniture("plant.desk.monstera.01", desk.id)).toBe(true);
+    const plant = useSceneStore.getState().furniture[1];
+    expect(plant).toMatchObject({ parentId: desk.id, position: { x: 10, y: 20 }, surfaceOffset: { x: -18, y: -24 } });
+    expect([...furnitureCells(useSceneStore.getState().furniture).values()]).not.toContain(plant.id);
+    store.moveFurniture(desk.id, { x: 11, y: 21 });
+    expect(useSceneStore.getState().furniture[1].position).toEqual({ x: 11, y: 21 });
+  });
+
+  it("removes attached surface objects with their desk", () => {
+    const store = useSceneStore.getState();
+    store.addFurniture("desk.work.light.01", { x: 10, y: 20 });
+    const desk = useSceneStore.getState().furniture[0];
+    store.addSurfaceFurniture("plant.desk.monstera.01", desk.id);
+    store.removeFurniture(desk.id);
+    expect(useSceneStore.getState().furniture).toEqual([]);
   });
 });

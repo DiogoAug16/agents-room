@@ -11,6 +11,23 @@ const initialAgents: Agent[] = [
   { id: "bruno", name: "Bruno", role: "Qualidade", description: "Cria testes e avalia mudanças.", color: 0xd18b64, status: "seated", direction: "west", position: { x: 10, y: 14 }, basePosition: { x: 10, y: 14 }, skills: ["testing"], skillStates: [{ id: "testing", enabled: true }], pluginStates: [] },
 ];
 
+function movingIds(furniture: FurnitureInstance[], id: string) {
+  const pivot = furniture.find((item) => item.id === id); if (!pivot) return new Set<string>();
+  const ids = new Set(furniture.filter((item) => item.id === id || (pivot.groupId && item.groupId === pivot.groupId)).map((item) => item.id));
+  furniture.filter((item) => item.parentId && ids.has(item.parentId)).forEach((item) => ids.add(item.id));
+  return ids;
+}
+
+function removalIds(furniture: FurnitureInstance[], id: string) {
+  const ids = new Set([id]);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    furniture.filter((item) => item.parentId && ids.has(item.parentId) && !ids.has(item.id)).forEach((item) => { ids.add(item.id); changed = true; });
+  }
+  return ids;
+}
+
 type SceneStore = {
   agents: Agent[];
   selectedId?: string;
@@ -28,6 +45,7 @@ type SceneStore = {
   agentSeatAssignments: AgentSeatAssignments;
   selectedFurnitureId?: string;
   addFurniture: (assetId: string, position: FurnitureInstance["position"]) => void;
+  addSurfaceFurniture: (assetId: string, hostId?: string) => boolean;
   moveFurniture: (id: string, position: FurnitureInstance["position"]) => void;
   removeFurniture: (id: string) => void;
   rotateFurniture: (id: string) => void;
@@ -65,12 +83,27 @@ export const useSceneStore = create<SceneStore>((set) => ({
   replaceAgents: (agents) => set((state) => ({ agents, selectedId: agents.some((agent) => agent.id === state.selectedId) ? state.selectedId : agents[0]?.id })),
   furniture: [], furnitureGroups: [], agentSeatAssignments: {}, furniturePast: [], furnitureFuture: [],
   addFurniture: (assetId, position) => set((state) => ({ furniture: [...state.furniture, { id: crypto.randomUUID(), assetId, position, orientation: "north_east", createdAt: new Date().toISOString() }], furniturePast: [...state.furniturePast, snapshot(state)], furnitureFuture: [] })),
+  addSurfaceFurniture: (assetId, hostId) => {
+    let added = false;
+    set((state) => {
+      const asset = furnitureAsset(assetId), host = state.furniture.find((item) => item.id === hostId), hostAsset = host && furnitureAsset(host.assetId);
+      if (!asset?.surface || !host || !hostAsset || !asset.surface.hostCategories.includes(hostAsset.category)) return state;
+      added = true;
+      return { furniture: [...state.furniture, { id: crypto.randomUUID(), assetId, position: { ...host.position }, orientation: "north_east", createdAt: new Date().toISOString(), parentId: host.id, surfaceOffset: asset.surface.offset }], furniturePast: [...state.furniturePast, snapshot(state)], furnitureFuture: [] };
+    });
+    return added;
+  },
   moveFurniture: (id, position) => set((state) => {
     const pivot = state.furniture.find((item) => item.id === id); if (!pivot) return state;
     const delta = { x: position.x - pivot.position.x, y: position.y - pivot.position.y };
-    return { furniture: state.furniture.map((item) => item.id === id || (pivot.groupId && item.groupId === pivot.groupId) ? { ...item, position: { x: item.position.x + delta.x, y: item.position.y + delta.y } } : item), furniturePast: [...state.furniturePast, snapshot(state)], furnitureFuture: [] };
+    const ids = movingIds(state.furniture, id);
+    return { furniture: state.furniture.map((item) => ids.has(item.id) ? { ...item, position: { x: item.position.x + delta.x, y: item.position.y + delta.y } } : item), furniturePast: [...state.furniturePast, snapshot(state)], furnitureFuture: [] };
   }),
-  removeFurniture: (id) => set((state) => ({ furniture: state.furniture.filter((item) => item.id !== id), furnitureGroups: state.furnitureGroups.map((group) => ({ ...group, instanceIds: group.instanceIds.filter((itemId) => itemId !== id) })).filter((group) => group.instanceIds.length), selectedFurnitureId: state.selectedFurnitureId === id ? undefined : state.selectedFurnitureId, furniturePast: [...state.furniturePast, snapshot(state)], furnitureFuture: [] })),
+  removeFurniture: (id) => set((state) => {
+    const ids = removalIds(state.furniture, id);
+    const agentSeatAssignments = Object.fromEntries(Object.entries(state.agentSeatAssignments).filter(([, seatId]) => !ids.has(seatId)));
+    return { furniture: state.furniture.filter((item) => !ids.has(item.id)), furnitureGroups: state.furnitureGroups.map((group) => ({ ...group, instanceIds: group.instanceIds.filter((itemId) => !ids.has(itemId)) })).filter((group) => group.instanceIds.length), agentSeatAssignments, selectedFurnitureId: state.selectedFurnitureId && ids.has(state.selectedFurnitureId) ? undefined : state.selectedFurnitureId, furniturePast: [...state.furniturePast, snapshot(state)], furnitureFuture: [] };
+  }),
   rotateFurniture: (id) => set((state) => ({ furniture: state.furniture.map((item) => item.id !== id ? item : { ...item, orientation: ({ north_east: "north_west", north_west: "south_west", south_west: "south_east", south_east: "north_east" } as const)[item.orientation] }), furniturePast: [...state.furniturePast, snapshot(state)], furnitureFuture: [] })),
   selectFurniture: (selectedFurnitureId) => set({ selectedFurnitureId }),
   replaceOfficeLayout: (furniture, furnitureGroups, agentSeatAssignments) => set({ furniture, furnitureGroups, agentSeatAssignments, selectedFurnitureId: undefined, furniturePast: [], furnitureFuture: [] }),
@@ -86,7 +119,7 @@ export const useSceneStore = create<SceneStore>((set) => ({
       const additions: FurnitureInstance[] = [
         { id: deskId, assetId: "desk.work.light.01", position: { x: position.x, y: position.y - 2 }, orientation: "north_east", createdAt: now, groupId },
         { id: chairId, assetId: "chair.office.black.01", position, orientation: "north_east", createdAt: now, groupId },
-        { id: monitorId, assetId: "monitor.black.01", position: { x: position.x, y: position.y - 2 }, orientation: "north_east", createdAt: now, groupId, parentId: deskId },
+        { id: monitorId, assetId: "monitor.black.01", position: { x: position.x, y: position.y - 2 }, orientation: "north_east", createdAt: now, groupId, parentId: deskId, surfaceOffset: furnitureAsset("monitor.black.01")!.surface!.offset },
       ];
       const occupied = furnitureCells(state.furniture);
       for (const item of additions) for (const offset of furnitureAsset(item.assetId)!.footprint) {
@@ -95,7 +128,7 @@ export const useSceneStore = create<SceneStore>((set) => ({
         occupied.set(`${cell.x},${cell.y}`, item.id);
       }
       created = true;
-      return { furniture: [...state.furniture, ...additions], furnitureGroups: [...state.furnitureGroups, { id: groupId, name: `Estação ${agentId}`, instanceIds: additions.map((item) => item.id), groupType: "workstation" }], agentSeatAssignments: { ...state.agentSeatAssignments, [agentId]: chairId }, furniturePast: [...state.furniturePast, snapshot(state)], furnitureFuture: [] };
+      return { furniture: [...state.furniture, ...additions], furnitureGroups: [...state.furnitureGroups, { id: groupId, name: `Estação ${agentId}`, instanceIds: additions.map((item) => item.id), groupType: "workstation" }], agentSeatAssignments: { ...state.agentSeatAssignments, [agentId]: chairId }, selectedFurnitureId: deskId, furniturePast: [...state.furniturePast, snapshot(state)], furnitureFuture: [] };
     });
     return created;
   },

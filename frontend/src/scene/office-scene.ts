@@ -173,12 +173,12 @@ export class OfficeScene extends Phaser.Scene {
     this.furnitureSprites.forEach((layers, id) => { if (!ids.has(id)) { layers.rear.destroy(); layers.front?.destroy(); this.furnitureSprites.delete(id); } });
     items.forEach((item) => {
       const asset = furnitureAsset(item.assetId); if (!asset) return;
-      const screen = gridToScreen(item.position); let layers = this.furnitureSprites.get(item.id);
+      const screen = this.furnitureScreenPosition(item); let layers = this.furnitureSprites.get(item.id);
       if (!layers) {
-        const rear = this.add.sprite(screen.x, screen.y, `furniture-${asset.id}`).setOrigin(0.5, 0.85).setScale(0.75).setInteractive({ useHandCursor: true });
-        rear.on("pointerdown", (pointer: Phaser.Input.Pointer) => { pointer.event.stopPropagation(); if (this.editMode) { this.furnitureDrag = item.id; window.dispatchEvent(new CustomEvent("furniture:select", { detail: item.id })); } });
+        const rear = this.add.sprite(screen.x, screen.y, `furniture-${asset.id}`).setOrigin(0.5, 0.85).setScale(asset.defaultScale ?? 0.75);
+        if (!item.parentId) rear.setInteractive({ useHandCursor: true }).on("pointerdown", (pointer: Phaser.Input.Pointer) => { pointer.event.stopPropagation(); if (this.editMode) { this.furnitureDrag = item.id; window.dispatchEvent(new CustomEvent("furniture:select", { detail: item.id })); } });
         const frontCropStart = asset.frontOcclusionStart;
-        const front = frontCropStart === undefined ? undefined : this.add.sprite(screen.x, screen.y, `furniture-${asset.id}`).setOrigin(0.5, 0.85).setScale(0.75);
+        const front = frontCropStart === undefined ? undefined : this.add.sprite(screen.x, screen.y, `furniture-${asset.id}`).setOrigin(0.5, 0.85).setScale(asset.defaultScale ?? 0.75);
         if (front) {
           const image = this.textures.get(`furniture-${asset.id}`).getSourceImage() as { width: number; height: number };
           const start = Math.round(image.height * frontCropStart!);
@@ -186,7 +186,7 @@ export class OfficeScene extends Phaser.Scene {
         }
         layers = { rear, front }; this.furnitureSprites.set(item.id, layers);
       }
-      layers.rear.setPosition(screen.x, screen.y).setDepth(screen.y - 4).setAlpha(this.editMode ? 1 : 0.96);
+      layers.rear.setPosition(screen.x, screen.y).setDepth(screen.y + (item.parentId ? 5 : -4)).setAlpha(this.editMode ? 1 : 0.96);
       layers.front?.setPosition(screen.x, screen.y).setDepth(screen.y + 4).setAlpha(this.editMode ? 1 : 0.96);
     });
   }
@@ -196,7 +196,7 @@ export class OfficeScene extends Phaser.Scene {
     const pivot = this.furnitureItems.find((item) => item.id === id); if (!pivot) return;
     const delta = { x: cell.x - pivot.position.x, y: cell.y - pivot.position.y };
     this.movingFurniture(id).forEach((item) => {
-      const layers = this.furnitureSprites.get(item.id); const position = gridToScreen({ x: item.position.x + delta.x, y: item.position.y + delta.y });
+      const layers = this.furnitureSprites.get(item.id); const position = this.furnitureScreenPosition(item, delta);
       if (layers) { layers.rear.setPosition(position.x, position.y).setAlpha(0.58); layers.front?.setPosition(position.x, position.y).setAlpha(0.58); }
     });
   }
@@ -212,7 +212,17 @@ export class OfficeScene extends Phaser.Scene {
 
   private movingFurniture(id: string) {
     const pivot = this.furnitureItems.find((item) => item.id === id);
-    return pivot?.groupId ? this.furnitureItems.filter((item) => item.groupId === pivot.groupId) : pivot ? [pivot] : [];
+    if (!pivot) return [];
+    const ids = new Set(this.furnitureItems.filter((item) => item.id === id || (pivot.groupId && item.groupId === pivot.groupId)).map((item) => item.id));
+    this.furnitureItems.filter((item) => item.parentId && ids.has(item.parentId)).forEach((item) => ids.add(item.id));
+    return this.furnitureItems.filter((item) => ids.has(item.id));
+  }
+
+  private furnitureScreenPosition(item: FurnitureInstance, delta = { x: 0, y: 0 }) {
+    const host = item.parentId ? this.furnitureItems.find((candidate) => candidate.id === item.parentId) : undefined;
+    const position = host ?? item;
+    const screen = gridToScreen({ x: position.position.x + delta.x, y: position.position.y + delta.y });
+    return { x: screen.x + (item.surfaceOffset?.x ?? 0), y: screen.y + (item.surfaceOffset?.y ?? 0) };
   }
 
   private moveToCell(id: string, pointer: Phaser.Input.Pointer) {

@@ -68,4 +68,6 @@ test("builds a grouped workstation for the selected agent", async ({ page }) => 
   const chair = page.getByLabel("Cadeira principal");
   await expect(chair.locator("option")).toHaveCount(2);
   await expect(chair).not.toHaveValue("");
+  await page.getByRole("button", { name: /Planta de mesa/ }).click();
+  await expect(page.getByRole("button", { name: /Planta de mesa.*1 na sala/ })).toBeVisible();
 });
