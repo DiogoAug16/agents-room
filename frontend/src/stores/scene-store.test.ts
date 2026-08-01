@@ -56,6 +56,17 @@ describe("furniture editor history", () => {
     expect(useSceneStore.getState().furniture.map((item) => item.position)).toEqual([{ x: 11, y: 22 }, { x: 11, y: 24 }, { x: 11, y: 22 }]);
   });
 
+  it("restores one default workstation for each current agent", () => {
+    const store = useSceneStore.getState();
+    store.addFurniture("water.dispenser.01", { x: 14, y: 20 });
+    expect(store.restoreDefaultFurniture()).toBe(true);
+    const { agents, furniture, furnitureGroups, agentSeatAssignments } = useSceneStore.getState();
+    expect(furniture).toHaveLength(agents.length * 3);
+    expect(furnitureGroups).toHaveLength(agents.length);
+    expect(Object.keys(agentSeatAssignments)).toEqual(agents.map((agent) => agent.id));
+    expect(furnitureGroups.every((group) => group.groupType === "workstation" && group.instanceIds.length === 3)).toBe(true);
+  });
+
   it("attaches surface objects to a desk without creating floor collision", () => {
     const store = useSceneStore.getState();
     store.addFurniture("desk.work.light.01", { x: 10, y: 20 });

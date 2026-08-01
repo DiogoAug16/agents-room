@@ -5,6 +5,15 @@ import { isInsideEmptyRoomFloor } from "../scene/maps/office-layout";
 
 type LayoutSnapshot = { furniture: FurnitureInstance[]; furnitureGroups: FurnitureGroup[]; agentSeatAssignments: AgentSeatAssignments };
 const snapshot = (state: LayoutSnapshot): LayoutSnapshot => ({ furniture: state.furniture, furnitureGroups: state.furnitureGroups, agentSeatAssignments: state.agentSeatAssignments });
+const workstationPreset = (agentId: string, position: FurnitureInstance["position"], groupId = crypto.randomUUID(), createdAt = new Date().toISOString()) => {
+  const deskId = crypto.randomUUID(), chairId = crypto.randomUUID();
+  const deskPosition = { x: position.x, y: position.y - 2 };
+  return { group: { id: groupId, name: `Estação ${agentId}`, instanceIds: [deskId, chairId], groupType: "workstation" as const }, chairId, furniture: [
+    { id: deskId, assetId: "desk.work.light.01", position: deskPosition, orientation: defaultFurnitureOrientation("desk.work.light.01"), createdAt, groupId },
+    { id: chairId, assetId: "chair.office.black.01", position, orientation: "north_east" as const, createdAt, groupId },
+    { id: crypto.randomUUID(), assetId: "monitor.black.01", position: deskPosition, orientation: "north_east" as const, createdAt, groupId, parentId: deskId, surfaceOffset: furnitureAsset("monitor.black.01")!.surface!.offset },
+  ] satisfies FurnitureInstance[] };
+};
 
 const initialAgents: Agent[] = [
   { id: "ana", name: "Ana", role: "Engenharia", description: "Implementa e revisa serviços.", color: 0x5ca6d8, status: "working", direction: "north", position: { x: 10, y: 23 }, basePosition: { x: 10, y: 23 }, skills: ["fastapi"], skillStates: [{ id: "fastapi", enabled: true }], pluginStates: [], task: "Validando adapter Codex" },
@@ -48,6 +57,7 @@ type SceneStore = {
   createWorkstationPreset: (agentId: string, position: FurnitureInstance["position"]) => boolean;
   createLoungePreset: () => boolean;
   clearFurniture: () => void;
+  restoreDefaultFurniture: () => boolean;
   undoFurniture: () => void;
   redoFurniture: () => void;
   furniturePast: LayoutSnapshot[];
@@ -163,12 +173,7 @@ export const useSceneStore = create<SceneStore>((set) => ({
   createWorkstationPreset: (agentId, position) => {
     let created = false;
     set((state) => {
-      const groupId = crypto.randomUUID(), deskId = crypto.randomUUID(), chairId = crypto.randomUUID(), monitorId = crypto.randomUUID(), now = new Date().toISOString();
-      const additions: FurnitureInstance[] = [
-        { id: deskId, assetId: "desk.work.light.01", position: { x: position.x, y: position.y - 2 }, orientation: defaultFurnitureOrientation("desk.work.light.01"), createdAt: now, groupId },
-        { id: chairId, assetId: "chair.office.black.01", position, orientation: "north_east", createdAt: now, groupId },
-        { id: monitorId, assetId: "monitor.black.01", position: { x: position.x, y: position.y - 2 }, orientation: "north_east", createdAt: now, groupId, parentId: deskId, surfaceOffset: furnitureAsset("monitor.black.01")!.surface!.offset },
-      ];
+      const preset = workstationPreset(agentId, position), additions = preset.furniture;
       const occupied = furnitureCells(state.furniture);
       for (const item of additions) for (const offset of furnitureAsset(item.assetId)!.footprint) {
         const cell = { x: item.position.x + offset.x, y: item.position.y + offset.y };
@@ -176,7 +181,7 @@ export const useSceneStore = create<SceneStore>((set) => ({
         occupied.set(`${cell.x},${cell.y}`, item.id);
       }
       created = true;
-      return { furniture: [...state.furniture, ...additions], furnitureGroups: [...state.furnitureGroups, { id: groupId, name: `Estação ${agentId}`, instanceIds: additions.map((item) => item.id), groupType: "workstation" }], agentSeatAssignments: { ...state.agentSeatAssignments, [agentId]: chairId }, selectedFurnitureId: deskId, selectedFurnitureIds: [deskId], furniturePast: [...state.furniturePast, snapshot(state)], furnitureFuture: [] };
+      return { furniture: [...state.furniture, ...additions], furnitureGroups: [...state.furnitureGroups, { ...preset.group, instanceIds: additions.map((item) => item.id) }], agentSeatAssignments: { ...state.agentSeatAssignments, [agentId]: preset.chairId }, selectedFurnitureId: additions[0].id, selectedFurnitureIds: [additions[0].id], furniturePast: [...state.furniturePast, snapshot(state)], furnitureFuture: [] };
     });
     return created;
   },
@@ -200,6 +205,25 @@ export const useSceneStore = create<SceneStore>((set) => ({
     return created;
   },
   clearFurniture: () => set((state) => ({ furniture: [], furnitureGroups: [], agentSeatAssignments: {}, selectedFurnitureId: undefined, selectedFurnitureIds: [], furniturePast: [...state.furniturePast, snapshot(state)], furnitureFuture: [] })),
+  restoreDefaultFurniture: () => {
+    let restored = false;
+    set((state) => {
+      const furniture: FurnitureInstance[] = [], furnitureGroups: FurnitureGroup[] = [], agentSeatAssignments: AgentSeatAssignments = {}, occupied = new Map<string, string>();
+      for (const agent of state.agents) {
+        const preset = workstationPreset(agent.id, agent.basePosition);
+        const valid = preset.furniture.every((item) => furnitureAsset(item.assetId)!.footprint.every((offset) => {
+          const cell = { x: item.position.x + offset.x, y: item.position.y + offset.y }, id = `${cell.x},${cell.y}`;
+          if (!isInsideEmptyRoomFloor(cell) || occupied.has(id)) return false;
+          occupied.set(id, item.id); return true;
+        }));
+        if (!valid) return state;
+        furniture.push(...preset.furniture); furnitureGroups.push({ ...preset.group, instanceIds: preset.furniture.map((item) => item.id) }); agentSeatAssignments[agent.id] = preset.chairId;
+      }
+      restored = true;
+      return { furniture, furnitureGroups, agentSeatAssignments, selectedFurnitureId: undefined, selectedFurnitureIds: [], furniturePast: [...state.furniturePast, snapshot(state)], furnitureFuture: [] };
+    });
+    return restored;
+  },
   undoFurniture: () => set((state) => { const previous = state.furniturePast.at(-1); return previous ? { ...previous, furniturePast: state.furniturePast.slice(0, -1), furnitureFuture: [snapshot(state), ...state.furnitureFuture] } : state; }),
   redoFurniture: () => set((state) => { const next = state.furnitureFuture[0]; return next ? { ...next, furniturePast: [...state.furniturePast, snapshot(state)], furnitureFuture: state.furnitureFuture.slice(1) } : state; }),
 }));
