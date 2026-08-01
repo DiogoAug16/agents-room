@@ -55,11 +55,15 @@ test("assigns a modular chair to the selected agent", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Editar sala" }).click();
   await page.getByRole("button", { name: /Cadeira executiva/ }).click();
+  await expect(page.getByText("Posicionando Cadeira executiva: clique no piso · Esc cancela")).toBeVisible();
+  await page.locator("canvas").click({ position: { x: 630, y: 450 } });
   const chair = page.getByLabel("Cadeira principal");
   await expect(chair.locator("option")).toHaveCount(2);
   await chair.selectOption({ index: 1 });
   await expect(chair).not.toHaveValue("");
   await page.getByRole("button", { name: /Bebedouro/ }).click();
+  await expect(page.getByText("Posicionando Bebedouro: clique no piso · Esc cancela")).toBeVisible();
+  await page.locator("canvas").click({ position: { x: 650, y: 420 } });
   await expect(page.getByRole("button", { name: /Bebedouro.*1 na sala/ })).toBeVisible();
 });
 

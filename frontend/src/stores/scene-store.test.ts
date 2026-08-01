@@ -15,6 +15,16 @@ describe("furniture editor history", () => {
     expect(useSceneStore.getState().furniture).toHaveLength(1);
   });
 
+  it("places a catalog item only on a free floor cell", () => {
+    const store = useSceneStore.getState();
+    store.startFurniturePlacement("chair.office.black.01");
+    expect(store.placeFurniture({ x: 10, y: 20 })).toBe(true);
+    expect(useSceneStore.getState().placingFurnitureAssetId).toBeUndefined();
+    store.startFurniturePlacement("chair.office.black.01");
+    expect(store.placeFurniture({ x: 10, y: 20 })).toBe(false);
+    expect(useSceneStore.getState().placingFurnitureAssetId).toBe("chair.office.black.01");
+  });
+
   it("keeps an explicit chair assignment independent from agent coordinates", () => {
     const store = useSceneStore.getState();
     store.assignAgentSeat("ana", "chair-ana");

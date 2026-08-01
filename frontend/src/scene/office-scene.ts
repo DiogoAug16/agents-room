@@ -12,7 +12,7 @@ import { IdleBehaviorController, type IdleBehaviorType } from "./idle-behavior-c
 import { NavigationGrid } from "./maps/navigation-grid";
 import { homeSeatForAgent, IDLE_POINTS, isInsideEmptyRoomFloor, MEETING_AREAS, STATIC_SEATS, staticObstacleKeys, WORKSTATION_CELLS, WORKSTATIONS, type SeatAnchor } from "./maps/office-layout";
 import { SeatRegistry, sameGridPoint, seatApproachWorldPosition, seatedWorldPosition } from "./maps/seats";
-import { FURNITURE_ASSETS, furnitureAsset, furnitureCells, furnitureImage, furnitureInteractionPoints, furnitureOrientations, furnitureOrigin, furnitureSeat, furnitureSeats, furnitureTextureKey, type AgentSeatAssignments, type FurnitureInstance } from "./furniture/catalog";
+import { FURNITURE_ASSETS, defaultFurnitureOrientation, furnitureAsset, furnitureCells, furnitureImage, furnitureInteractionPoints, furnitureOrientations, furnitureOrigin, furnitureSeat, furnitureSeats, furnitureTextureKey, type AgentSeatAssignments, type FurnitureInstance } from "./furniture/catalog";
 
 type DrawnAgent = { body: Phaser.GameObjects.Container; station: Phaser.GameObjects.Container; sprite: Phaser.GameObjects.Sprite; status: Phaser.GameObjects.Arc; data: Agent; currentCell: Agent["position"]; seatId?: string; idleToken: number };
 type FurnitureLayers = { rear: Phaser.GameObjects.Sprite; front?: Phaser.GameObjects.Sprite };
@@ -28,6 +28,8 @@ export class OfficeScene extends Phaser.Scene {
   private stationPreview?: Phaser.GameObjects.Graphics;
   private stationDrag?: string;
   private furnitureDrag?: string;
+  private placingFurnitureAssetId?: string;
+  private furnitureGhost?: Phaser.GameObjects.Sprite;
   private readonly furnitureSprites = new Map<string, FurnitureLayers>();
   private furnitureBlocks = new Map<string, string>();
   private furnitureItems: FurnitureInstance[] = [];
@@ -64,9 +66,10 @@ export class OfficeScene extends Phaser.Scene {
     this.cameras.main.setBounds(-80, -80, background.displayWidth + 160, background.displayHeight + 160);
     this.cameras.main.setZoom(0.72);
     this.input.on("wheel", (_: Phaser.Input.Pointer, _objects: unknown, _dx: number, dy: number) => this.cameras.main.setZoom(Phaser.Math.Clamp(this.cameras.main.zoom - dy * 0.001, 0.55, 1.15)));
-    background.on("pointerdown", (pointer: Phaser.Input.Pointer) => { this.draggingCamera = true; this.lastPointer.set(pointer.x, pointer.y); });
+    background.on("pointerdown", (pointer: Phaser.Input.Pointer) => { if (this.placingFurnitureAssetId) { this.previewNewFurniture(pointer); return; } this.draggingCamera = true; this.lastPointer.set(pointer.x, pointer.y); });
     this.input.on("pointermove", (pointer: Phaser.Input.Pointer) => {
       if (this.debugEnabled) this.updateDebugPointer(pointer);
+      if (this.placingFurnitureAssetId) { this.previewNewFurniture(pointer); return; }
       if (this.stationDrag) { this.previewStation(this.stationDrag, pointer); return; }
       if (this.furnitureDrag) { this.previewFurniture(this.furnitureDrag, pointer); return; }
       if (!this.draggingCamera) return;
@@ -75,15 +78,16 @@ export class OfficeScene extends Phaser.Scene {
       this.lastPointer.set(pointer.x, pointer.y);
     });
     this.input.on("pointerup", (pointer: Phaser.Input.Pointer) => {
+      if (this.placingFurnitureAssetId) { this.placeNewFurniture(pointer); return; }
       if (this.stationDrag) { this.moveToCell(this.stationDrag, pointer); this.stationDrag = undefined; this.stationOrigin = undefined; this.stationPreview?.clear(); }
       if (this.furnitureDrag) { this.moveFurnitureToCell(this.furnitureDrag, pointer); this.furnitureDrag = undefined; this.stationPreview?.clear(); }
       this.draggingCamera = false;
     });
     sceneEvents.addEventListener("agents", this.sync as EventListener);
     sceneEvents.addEventListener("interaction", this.interact as EventListener);
-    this.sync(new CustomEvent("agents", { detail: { agents: useSceneStore.getState().agents, editMode: useSceneStore.getState().editMode, furniture: useSceneStore.getState().furniture, agentSeatAssignments: useSceneStore.getState().agentSeatAssignments } }));
+    this.sync(new CustomEvent("agents", { detail: { agents: useSceneStore.getState().agents, editMode: useSceneStore.getState().editMode, furniture: useSceneStore.getState().furniture, agentSeatAssignments: useSceneStore.getState().agentSeatAssignments, placingFurnitureAssetId: useSceneStore.getState().placingFurnitureAssetId } }));
     this.input.keyboard?.on("keydown-F", () => this.focusSelected());
-    this.input.keyboard?.on("keydown-ESC", () => window.dispatchEvent(new Event("agent:deselect")));
+    this.input.keyboard?.on("keydown-ESC", () => { if (this.placingFurnitureAssetId) window.dispatchEvent(new Event("furniture:cancel-placement")); else window.dispatchEvent(new Event("agent:deselect")); });
     if (import.meta.env.DEV) this.input.keyboard?.on("keydown-N", () => this.toggleNavigationDebug());
   }
 
@@ -101,9 +105,11 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   private sync = (event: Event) => {
-    const { agents, editMode, furniture, agentSeatAssignments } = (event as CustomEvent<{ agents: Agent[]; editMode: boolean; furniture: FurnitureInstance[]; agentSeatAssignments: AgentSeatAssignments }>).detail;
+    const { agents, editMode, furniture, agentSeatAssignments, placingFurnitureAssetId } = (event as CustomEvent<{ agents: Agent[]; editMode: boolean; furniture: FurnitureInstance[]; agentSeatAssignments: AgentSeatAssignments; placingFurnitureAssetId?: string }>).detail;
     this.editMode = editMode;
     this.agentSeatAssignments = agentSeatAssignments;
+    this.placingFurnitureAssetId = editMode ? placingFurnitureAssetId : undefined;
+    if (!this.placingFurnitureAssetId) { this.furnitureGhost?.destroy(); this.furnitureGhost = undefined; this.stationPreview?.clear(); }
     this.gridGraphics?.setVisible(editMode);
     if (!editMode) { this.stationDrag = undefined; this.stationOrigin = undefined; this.stationPreview?.clear(); }
     if (editMode) this.idleController.cancelAll();
@@ -223,6 +229,30 @@ export class OfficeScene extends Phaser.Scene {
       const layers = this.furnitureSprites.get(item.id); const position = this.furnitureScreenPosition(item, delta);
       if (layers) { layers.rear.setPosition(position.x, position.y).setAlpha(0.58); layers.front?.setPosition(position.x, position.y).setAlpha(0.58); }
     });
+  }
+  private previewNewFurniture(pointer: Phaser.Input.Pointer) {
+    const asset = this.placingFurnitureAssetId && furnitureAsset(this.placingFurnitureAssetId);
+    if (!asset) return;
+    const point = this.cameras.main.getWorldPoint(pointer.x, pointer.y); const cell = screenToGrid(point.x, point.y); const screen = gridToScreen(cell);
+    if (!this.furnitureGhost) this.furnitureGhost = this.add.sprite(screen.x, screen.y, furnitureTextureKey(asset, defaultFurnitureOrientation(asset.id))).setOrigin(furnitureOrigin(asset, defaultFurnitureOrientation(asset.id)).x, furnitureOrigin(asset, defaultFurnitureOrientation(asset.id)).y).setScale(asset.defaultScale ?? 0.75).setDepth(99_997);
+    const valid = this.isNewFurniturePlacementValid(asset.id, cell);
+    this.furnitureGhost.setPosition(screen.x, screen.y).setAlpha(valid ? 0.58 : 0.34).setTint(valid ? 0x9de2d2 : 0xffaaa4);
+    if (!this.stationPreview) this.stationPreview = this.add.graphics().setDepth(99_996);
+    this.stationPreview.clear().fillStyle(valid ? 0x4cae9b : 0xd35c5c, 0.32);
+    asset.footprint.forEach((offset) => { const tile = gridToScreen({ x: cell.x + offset.x, y: cell.y + offset.y }); this.stationPreview!.fillPoints([new Phaser.Geom.Point(tile.x, tile.y - TILE_HEIGHT / 2), new Phaser.Geom.Point(tile.x + TILE_WIDTH / 2, tile.y), new Phaser.Geom.Point(tile.x, tile.y + TILE_HEIGHT / 2), new Phaser.Geom.Point(tile.x - TILE_WIDTH / 2, tile.y)], true); });
+  }
+  private isNewFurniturePlacementValid(assetId: string, position: Agent["position"]) {
+    const asset = furnitureAsset(assetId); if (!asset) return false;
+    const occupied = furnitureCells(this.furnitureItems);
+    return asset.footprint.every((offset) => {
+      const cell = { x: position.x + offset.x, y: position.y + offset.y };
+      return isInsideEmptyRoomFloor(cell) && !occupied.has(`${cell.x},${cell.y}`) && ![...this.agents.values()].some((agent) => sameGridPoint(agent.currentCell, cell));
+    });
+  }
+  private placeNewFurniture(pointer: Phaser.Input.Pointer) {
+    const point = this.cameras.main.getWorldPoint(pointer.x, pointer.y); const cell = screenToGrid(point.x, point.y);
+    if (!this.placingFurnitureAssetId || !this.isNewFurniturePlacementValid(this.placingFurnitureAssetId, cell)) { window.dispatchEvent(new Event("furniture:invalid")); return; }
+    window.dispatchEvent(new CustomEvent("furniture:place", { detail: cell }));
   }
   private moveFurnitureToCell(id: string, pointer: Phaser.Input.Pointer) {
     const point = this.cameras.main.getWorldPoint(pointer.x, pointer.y); const cell = screenToGrid(point.x, point.y);

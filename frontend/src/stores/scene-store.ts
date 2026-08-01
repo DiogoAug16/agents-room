@@ -44,7 +44,11 @@ type SceneStore = {
   furnitureGroups: FurnitureGroup[];
   agentSeatAssignments: AgentSeatAssignments;
   selectedFurnitureId?: string;
+  placingFurnitureAssetId?: string;
   addFurniture: (assetId: string, position: FurnitureInstance["position"]) => void;
+  startFurniturePlacement: (assetId: string) => void;
+  placeFurniture: (position: FurnitureInstance["position"]) => boolean;
+  cancelFurniturePlacement: () => void;
   addSurfaceFurniture: (assetId: string, hostId?: string) => boolean;
   moveFurniture: (id: string, position: FurnitureInstance["position"]) => void;
   removeFurniture: (id: string) => void;
@@ -66,7 +70,7 @@ export const useSceneStore = create<SceneStore>((set) => ({
   selectedId: "ana",
   editMode: false,
   select: (selectedId) => set({ selectedId }),
-  toggleEdit: () => set((state) => ({ editMode: !state.editMode })),
+  toggleEdit: () => set((state) => ({ editMode: !state.editMode, placingFurnitureAssetId: state.editMode ? undefined : state.placingFurnitureAssetId })),
   addAgent: (name, role) => set((state) => {
     if (state.agents.length >= 8) return state;
     const index = state.agents.length;
@@ -84,6 +88,21 @@ export const useSceneStore = create<SceneStore>((set) => ({
   replaceAgents: (agents) => set((state) => ({ agents, selectedId: agents.some((agent) => agent.id === state.selectedId) ? state.selectedId : agents[0]?.id })),
   furniture: [], furnitureGroups: [], agentSeatAssignments: {}, furniturePast: [], furnitureFuture: [],
   addFurniture: (assetId, position) => set((state) => ({ furniture: [...state.furniture, { id: crypto.randomUUID(), assetId, position, orientation: defaultFurnitureOrientation(assetId), createdAt: new Date().toISOString() }], furniturePast: [...state.furniturePast, snapshot(state)], furnitureFuture: [] })),
+  startFurniturePlacement: (assetId) => set({ placingFurnitureAssetId: assetId, selectedFurnitureId: undefined }),
+  placeFurniture: (position) => {
+    let placed = false;
+    set((state) => {
+      const asset = state.placingFurnitureAssetId && furnitureAsset(state.placingFurnitureAssetId);
+      if (!asset) return state;
+      const cells = asset.footprint.map((offset) => ({ x: position.x + offset.x, y: position.y + offset.y }));
+      const occupied = furnitureCells(state.furniture);
+      if (!cells.every(isInsideEmptyRoomFloor) || cells.some((cell) => occupied.has(`${cell.x},${cell.y}`))) return state;
+      placed = true;
+      return { furniture: [...state.furniture, { id: crypto.randomUUID(), assetId: asset.id, position, orientation: defaultFurnitureOrientation(asset.id), createdAt: new Date().toISOString() }], placingFurnitureAssetId: undefined, furniturePast: [...state.furniturePast, snapshot(state)], furnitureFuture: [] };
+    });
+    return placed;
+  },
+  cancelFurniturePlacement: () => set({ placingFurnitureAssetId: undefined }),
   addSurfaceFurniture: (assetId, hostId) => {
     let added = false;
     set((state) => {
