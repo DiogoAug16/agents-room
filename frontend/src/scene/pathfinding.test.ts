@@ -28,9 +28,9 @@ describe("A* pathfinding", () => {
 
   it("uses only declared navigation cells and reaches a chair approach", () => {
     const navigation = new NavigationGrid();
-    const path = findNavigationPath({ x: 9, y: 13 }, { x: 7, y: 5 }, navigation, "ana", new Set());
-    expect(path?.at(-1)).toEqual({ x: 7, y: 5 });
+    const path = findNavigationPath({ x: 11, y: 24 }, { x: 11, y: 14 }, navigation, "ana", new Set());
+    expect(path?.at(-1)).toEqual({ x: 11, y: 14 });
     expect(path?.every((point) => navigation.cellAt(point)?.walkable)).toBe(true);
-    expect(findNavigationPath({ x: 9, y: 13 }, { x: 8, y: 5 }, navigation, "ana", new Set())).toBeNull();
+    expect(findNavigationPath({ x: 11, y: 24 }, { x: 12, y: 13 }, navigation, "ana", new Set())).toBeNull();
   });
 });

@@ -10,7 +10,7 @@ import { clearEdgeConnectedBackdrop } from "./alpha-mask";
 import { isValidStationCell } from "./station-layout";
 import { IdleBehaviorController, type IdleBehaviorType } from "./idle-behavior-controller";
 import { NavigationGrid } from "./maps/navigation-grid";
-import { homeSeatForAgent, IDLE_POINTS, MEETING_AREAS, STATIC_SEATS, staticObstacleKeys, WORKSTATION_CELLS, type SeatAnchor } from "./maps/office-layout";
+import { homeSeatForAgent, IDLE_POINTS, MEETING_AREAS, STATIC_SEATS, staticObstacleKeys, WORKSTATION_CELLS, WORKSTATIONS, type SeatAnchor } from "./maps/office-layout";
 import { SeatRegistry, sameGridPoint, seatApproachWorldPosition, seatedWorldPosition } from "./maps/seats";
 
 type DrawnAgent = { body: Phaser.GameObjects.Container; station: Phaser.GameObjects.Container; sprite: Phaser.GameObjects.Sprite; status: Phaser.GameObjects.Arc; data: Agent; currentCell: Agent["position"]; seatId?: string; idleToken: number };
@@ -176,7 +176,9 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   private isStationCellValid(agentId: string, cell: Agent["position"]) {
-    return WORKSTATION_CELLS.some((anchor) => sameGridPoint(anchor, cell)) && this.navigation.canEnter({ x: cell.x, y: cell.y + 1 }, agentId) && isValidStationCell(cell, agentId, [...this.agents.values()].map(({ data }) => data), this.furnitureCells);
+    const anchor = WORKSTATIONS.find((item) => sameGridPoint(item.gridPosition, cell));
+    if (!anchor) return false;
+    return this.navigation.canEnter(anchor.approachPosition, agentId) && isValidStationCell(cell, agentId, [...this.agents.values()].map(({ data }) => data), this.furnitureCells);
   }
 
   private homeSeat(agent: Agent): SeatAnchor { return homeSeatForAgent(agent); }

@@ -21,13 +21,8 @@ ACTIVE_TASK_STATES = ("created", "queued", "starting", "running", "waiting_appro
 task_semaphore = asyncio.Semaphore(3)
 active_providers: dict[str, CodexAgentProvider] = {}
 write_locks: dict[str, asyncio.Lock] = {}
-WORKSTATION_CELLS = ((9, 12), (10, 4), (15, 10), (19, 10), (13, 16), (16, 14), (11, 18), (16, 12))
-FURNITURE_CELLS = frozenset({
-    *(cell for x in range(8, 13) for cell in ((x, 5), (x, 6))),
-    *(cell for x in range(8, 13) for cell in ((x, 10),)),
-    *(cell for x in range(17, 22) for cell in ((x, 8),)),
-    *(cell for x in range(7, 14) for cell in ((x, 22), (x, 23))),
-})
+WORKSTATION_CELLS = ((5, 23), (11, 23), (11, 13), (5, 13), (11, 10), (21, 5), (22, 12), (32, 21))
+FURNITURE_CELLS = frozenset()
 MAX_DELEGATION_DEPTH = 2
 MAX_SUBTASKS_PER_TASK = 4
 TASK_TIMEOUT_SECONDS = 600
@@ -44,7 +39,12 @@ def write_lock_for(project_root: str) -> asyncio.Lock:
 
 
 def interaction_points_for(x: int, y: int) -> list[dict[str, int]]:
-    return [{"x": point_x, "y": point_y} for point_x, point_y in ((x, y - 1), (x + 1, y), (x - 1, y)) if 0 <= point_x < 32 and 0 <= point_y < 28]
+    return [{"x": point_x, "y": point_y} for point_x, point_y in ((x, y - 1), (x + 1, y), (x - 1, y)) if 0 <= point_x < 40 and 0 <= point_y < 38]
+
+
+def next_workstation(session: Session, workspace_id: str) -> tuple[int, int]:
+    occupied = {(x, y) for x, y in session.execute(select(Agent.base_x, Agent.base_y).where(Agent.workspace_id == workspace_id)).tuples()}
+    return next((cell for cell in WORKSTATION_CELLS if cell not in occupied), None)
 
 
 def agent_payload(agent: Agent) -> dict:
@@ -99,18 +99,24 @@ def ensure_catalog(session: Session) -> None:
 def seed(session: Session) -> Workspace:
     workspace = session.scalar(select(Workspace).limit(1))
     if workspace:
-        if workspace.settings.get("scene_layout_version") != 6:
-            legacy_positions = {("Ana", 8, 6): (9, 12), ("Bruno", 14, 8): (10, 4), ("Bruno", 7, 4): (10, 4), ("Bruno", 9, 6): (10, 4), ("Bruno", 11, 1): (10, 4)}
-            for agent in session.scalars(select(Agent).where(Agent.workspace_id == workspace.id)):
+        if workspace.settings.get("scene_layout_version") != 9:
+            legacy_positions = {("Ana", 8, 6): (11, 23), ("Ana", 9, 12): (11, 23), ("Bruno", 14, 8): (11, 13), ("Bruno", 7, 4): (11, 13), ("Bruno", 9, 6): (11, 13), ("Bruno", 11, 1): (11, 13), ("Bruno", 10, 4): (11, 13), ("Joao", 3, 18): (5, 23)}
+            agents = list(session.scalars(select(Agent).where(Agent.workspace_id == workspace.id)))
+            occupied: set[tuple[int, int]] = set()
+            for agent in agents:
                 position = legacy_positions.get((agent.name, agent.base_x, agent.base_y))
+                if not position and (agent.base_x, agent.base_y) not in WORKSTATION_CELLS:
+                    position = next((cell for cell in WORKSTATION_CELLS if cell not in occupied), None)
                 if not position:
+                    occupied.add((agent.base_x, agent.base_y))
                     continue
                 agent.base_x = agent.current_x = position[0]; agent.base_y = agent.current_y = position[1]
                 if agent.workstation:
                     agent.workstation.x, agent.workstation.y = position
                     agent.workstation.interaction_points = interaction_points_for(*position)
-            workspace.settings = {**workspace.settings, "scene_layout_version": 6}
-            workspace.room_width, workspace.room_height = 32, 28
+                occupied.add(position)
+            workspace.settings = {**workspace.settings, "scene_layout_version": 9}
+            workspace.room_width, workspace.room_height = 40, 38
             session.commit()
         ensure_catalog(session)
         return workspace
@@ -119,8 +125,8 @@ def seed(session: Session) -> Workspace:
     ensure_catalog(session)
     session.flush()
     for index, (name, role, description, x, y) in enumerate((
-        ("Ana", "Engenharia", "Implementa e revisa serviços.", 9, 12),
-        ("Bruno", "Qualidade", "Cria testes e avalia mudanças.", 10, 4),
+        ("Ana", "Engenharia", "Implementa e revisa serviços.", 11, 23),
+        ("Bruno", "Qualidade", "Cria testes e avalia mudanças.", 11, 13),
     )):
         agent = Agent(workspace_id=workspace.id, name=name, role=role, description=description, appearance={"characterPreset": f"agent-{index + 1:03}"}, visual_status="working" if index == 0 else "seated", base_x=x, base_y=y, current_x=x, current_y=y)
         session.add(agent); session.flush()
@@ -167,7 +173,10 @@ async def create_agent(workspace_id: str, body: AgentCreate, session: Session = 
     count = len(session.scalars(select(Agent.id).where(Agent.workspace_id == workspace_id)).all())
     if count >= 8:
         raise HTTPException(409, "A workspace supports at most eight agents")
-    x, y = WORKSTATION_CELLS[count]
+    position = next_workstation(session, workspace_id)
+    if not position:
+        raise HTTPException(409, "No mapped workstation is available")
+    x, y = position
     agent = Agent(workspace_id=workspace_id, name=body.name, role=body.role, description=body.description, permission=body.permission, appearance={"characterPreset": f"agent-{count + 1:03}"}, base_x=x, base_y=y, current_x=x, current_y=y)
     session.add(agent); session.flush()
     session.add(Workstation(workspace_id=workspace_id, agent_id=agent.id, x=x, y=y, interaction_points=interaction_points_for(x, y)))

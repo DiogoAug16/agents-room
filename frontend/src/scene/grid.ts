@@ -2,11 +2,10 @@ import type { GridPoint } from "../types";
 
 export const TILE_WIDTH = 64;
 export const TILE_HEIGHT = 32;
-export const GRID_WIDTH = 32;
-export const GRID_HEIGHT = 28;
-// Calibrated from the supplied art: this is the north point of the usable floor,
-// not the canvas origin or the skyline.
-export const ORIGIN = { x: 900, y: 300 };
+export const GRID_WIDTH = 40;
+export const GRID_HEIGHT = 38;
+// Calibrated from the supplied green-path annotation, in scene world coordinates.
+export const ORIGIN = { x: 1200, y: 150 };
 
 export function gridToScreen({ x, y }: GridPoint) {
   return { x: ORIGIN.x + (x - y) * TILE_WIDTH / 2, y: ORIGIN.y + (x + y) * TILE_HEIGHT / 2 };
