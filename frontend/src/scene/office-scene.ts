@@ -12,7 +12,7 @@ import { IdleBehaviorController, type IdleBehaviorType } from "./idle-behavior-c
 import { NavigationGrid } from "./maps/navigation-grid";
 import { homeSeatForAgent, IDLE_POINTS, isInsideEmptyRoomFloor, MEETING_AREAS, STATIC_SEATS, staticObstacleKeys, WORKSTATION_CELLS, WORKSTATIONS, type SeatAnchor } from "./maps/office-layout";
 import { SeatRegistry, sameGridPoint, seatApproachWorldPosition, seatedWorldPosition } from "./maps/seats";
-import { furnitureAsset, furnitureCells, type FurnitureInstance } from "./furniture/catalog";
+import { furnitureAsset, furnitureCells, type AgentSeatAssignments, type FurnitureInstance } from "./furniture/catalog";
 
 type DrawnAgent = { body: Phaser.GameObjects.Container; station: Phaser.GameObjects.Container; sprite: Phaser.GameObjects.Sprite; status: Phaser.GameObjects.Arc; data: Agent; currentCell: Agent["position"]; seatId?: string; idleToken: number };
 type FurnitureLayers = { rear: Phaser.GameObjects.Sprite; front?: Phaser.GameObjects.Sprite };
@@ -31,6 +31,7 @@ export class OfficeScene extends Phaser.Scene {
   private readonly furnitureSprites = new Map<string, FurnitureLayers>();
   private furnitureBlocks = new Map<string, string>();
   private furnitureItems: FurnitureInstance[] = [];
+  private agentSeatAssignments: AgentSeatAssignments = {};
   private stationOrigin?: Agent["position"];
   private readonly navigation = new NavigationGrid();
   private readonly seats = new SeatRegistry();
@@ -82,7 +83,7 @@ export class OfficeScene extends Phaser.Scene {
     });
     sceneEvents.addEventListener("agents", this.sync as EventListener);
     sceneEvents.addEventListener("interaction", this.interact as EventListener);
-    this.sync(new CustomEvent("agents", { detail: { agents: useSceneStore.getState().agents, editMode: useSceneStore.getState().editMode, furniture: useSceneStore.getState().furniture } }));
+    this.sync(new CustomEvent("agents", { detail: { agents: useSceneStore.getState().agents, editMode: useSceneStore.getState().editMode, furniture: useSceneStore.getState().furniture, agentSeatAssignments: useSceneStore.getState().agentSeatAssignments } }));
     this.input.keyboard?.on("keydown-F", () => this.focusSelected());
     this.input.keyboard?.on("keydown-ESC", () => window.dispatchEvent(new Event("agent:deselect")));
     if (import.meta.env.DEV) this.input.keyboard?.on("keydown-N", () => this.toggleNavigationDebug());
@@ -102,8 +103,9 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   private sync = (event: Event) => {
-    const { agents, editMode, furniture } = (event as CustomEvent<{ agents: Agent[]; editMode: boolean; furniture: FurnitureInstance[] }>).detail;
+    const { agents, editMode, furniture, agentSeatAssignments } = (event as CustomEvent<{ agents: Agent[]; editMode: boolean; furniture: FurnitureInstance[]; agentSeatAssignments: AgentSeatAssignments }>).detail;
     this.editMode = editMode;
+    this.agentSeatAssignments = agentSeatAssignments;
     this.gridGraphics?.setVisible(editMode);
     if (!editMode) { this.stationDrag = undefined; this.stationOrigin = undefined; this.stationPreview?.clear(); }
     if (editMode) this.idleController.cancelAll();
@@ -154,7 +156,7 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   private modularHomeSeat(agent: Agent): SeatAnchor | undefined {
-    const item = this.furnitureItems.find((value) => sameGridPoint(value.position, agent.basePosition) && furnitureAsset(value.assetId)?.seat);
+    const item = this.furnitureItems.find((value) => value.id === this.agentSeatAssignments[agent.id]);
     const definition = item && furnitureAsset(item.assetId)?.seat;
     if (!item || !definition) return undefined;
     return {

@@ -21,8 +21,9 @@ class PositionUpdate(BaseModel):
 
 
 class OfficeLayoutUpdate(BaseModel):
-    schema_version: int = Field(default=1, ge=1, le=100)
+    schema_version: int = Field(default=2, ge=1, le=100)
     furniture_instances: list[dict] = Field(default_factory=list, max_length=200)
+    agent_seat_assignments: dict[str, str] = Field(default_factory=dict)
 
 
 class SkillAssignment(BaseModel):

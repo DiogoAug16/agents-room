@@ -3,6 +3,7 @@ import type { Direction, GridPoint } from "../../types";
 export type FurnitureCategory = "chair" | "desk" | "sofa" | "plant";
 export type FurnitureOrientation = "north_east" | "north_west" | "south_east" | "south_west";
 export type FurnitureInstance = { id: string; assetId: string; position: GridPoint; orientation: FurnitureOrientation; createdAt: string };
+export type AgentSeatAssignments = Record<string, string>;
 export type FurnitureAsset = { id: string; name: string; category: FurnitureCategory; image: string; footprint: GridPoint[]; navigationPadding: number; seat?: { anchor: GridPoint; approach: GridPoint; facing: Direction; offset: GridPoint }; frontOcclusionStart?: number; };
 
 export const FURNITURE_ASSETS: FurnitureAsset[] = [

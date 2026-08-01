@@ -168,7 +168,7 @@ def get_office_layout(workspace_id: str, session: Session = Depends(get_session)
     workspace = session.get(Workspace, workspace_id)
     if not workspace:
         raise HTTPException(404, "Workspace not found")
-    return workspace.settings.get("office_layout", {"schemaVersion": 1, "furnitureInstances": []})
+    return workspace.settings.get("office_layout", {"schemaVersion": 2, "furnitureInstances": [], "agentSeatAssignments": {}})
 
 
 @app.put("/workspaces/{workspace_id}/office-layout")
@@ -176,7 +176,7 @@ async def update_office_layout(workspace_id: str, body: OfficeLayoutUpdate, sess
     workspace = session.get(Workspace, workspace_id)
     if not workspace:
         raise HTTPException(404, "Workspace not found")
-    layout = {"schemaVersion": body.schema_version, "furnitureInstances": body.furniture_instances}
+    layout = {"schemaVersion": body.schema_version, "furnitureInstances": body.furniture_instances, "agentSeatAssignments": body.agent_seat_assignments}
     workspace.settings = {**workspace.settings, "office_layout": layout}
     session.commit()
     await emit(session, workspace.id, "workspace.layout.updated", payload=layout)
