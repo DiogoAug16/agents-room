@@ -136,7 +136,7 @@ describe("furniture editor history", () => {
     store.selectFurniture(dispenser.id, true);
     store.groupSelectedFurniture();
     expect(store.renameSelectedFurnitureGroup("Ponto de foco")).toBe(true);
-    expect(useSceneStore.getState().furnitureGroups[0].name).toBe("Ponto de foco");
+    expect(useSceneStore.getState().furnitureGroups[0]).toMatchObject({ name: "Ponto de foco", groupType: "custom", instanceIds: [chair.id, dispenser.id] });
     useSceneStore.getState().undoFurniture();
     expect(useSceneStore.getState().furnitureGroups[0].name).toBe("Grupo 1");
     expect(store.renameSelectedFurnitureGroup(" ")).toBe(false);
