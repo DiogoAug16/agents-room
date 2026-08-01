@@ -149,7 +149,7 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="Agents Room", lifespan=lifespan)
-app.add_middleware(CORSMiddleware, allow_origins=["http://127.0.0.1:5173", "http://localhost:5173"], allow_methods=["*"], allow_headers=["*"], allow_credentials=False)
+app.add_middleware(CORSMiddleware, allow_origins=["http://127.0.0.1:5173", "http://localhost:5173", "http://127.0.0.1:5174"], allow_methods=["*"], allow_headers=["*"], allow_credentials=False)
 
 
 @app.get("/health")
@@ -168,7 +168,7 @@ def get_office_layout(workspace_id: str, session: Session = Depends(get_session)
     workspace = session.get(Workspace, workspace_id)
     if not workspace:
         raise HTTPException(404, "Workspace not found")
-    return workspace.settings.get("office_layout", {"schemaVersion": 2, "furnitureInstances": [], "agentSeatAssignments": {}})
+    return workspace.settings.get("office_layout", {"schemaVersion": 3, "furnitureInstances": [], "furnitureGroups": [], "agentSeatAssignments": {}})
 
 
 @app.put("/workspaces/{workspace_id}/office-layout")
@@ -176,7 +176,7 @@ async def update_office_layout(workspace_id: str, body: OfficeLayoutUpdate, sess
     workspace = session.get(Workspace, workspace_id)
     if not workspace:
         raise HTTPException(404, "Workspace not found")
-    layout = {"schemaVersion": body.schema_version, "furnitureInstances": body.furniture_instances, "agentSeatAssignments": body.agent_seat_assignments}
+    layout = {"schemaVersion": body.schema_version, "furnitureInstances": body.furniture_instances, "furnitureGroups": body.furniture_groups, "agentSeatAssignments": body.agent_seat_assignments}
     workspace.settings = {**workspace.settings, "office_layout": layout}
     session.commit()
     await emit(session, workspace.id, "workspace.layout.updated", payload=layout)

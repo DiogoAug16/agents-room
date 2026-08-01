@@ -20,7 +20,7 @@ test("validates agent creation and switches room modes", async ({ page }) => {
   await expect(page.locator(".inspector").getByRole("heading", { name: "Ana" })).toBeVisible();
   await page.getByRole("button", { name: "FastAPI Backend · APIs locais tipadas · workspace_write", exact: true }).click();
   await expect(page.locator(".inspector").getByRole("button", { name: "Pausar" })).toBeVisible();
-  await page.getByRole("button", { name: "Arrastar Testes" }).dragTo(page.locator(".inspector .skill-list").first());
+  await page.getByRole("button", { name: /Testes Qualidade/ }).click();
   await expect(page.locator(".inspector").getByRole("button", { name: "Pausar" })).toHaveCount(2);
   await page.getByLabel("Buscar skills").fill("Interface");
   await expect(page.getByRole("button", { name: "Interface Frontend · Fluxos React e acessibilidade · workspace_write", exact: true })).toBeVisible();
@@ -58,5 +58,14 @@ test("assigns a modular chair to the selected agent", async ({ page }) => {
   const chair = page.getByLabel("Cadeira principal");
   await expect(chair.locator("option")).toHaveCount(2);
   await chair.selectOption({ index: 1 });
+  await expect(chair).not.toHaveValue("");
+});
+
+test("builds a grouped workstation for the selected agent", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Editar sala" }).click();
+  await page.getByRole("button", { name: "Montar estação" }).click();
+  const chair = page.getByLabel("Cadeira principal");
+  await expect(chair.locator("option")).toHaveCount(2);
   await expect(chair).not.toHaveValue("");
 });

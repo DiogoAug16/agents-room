@@ -56,11 +56,12 @@ class ApiTests(unittest.TestCase):
 
     def test_persists_the_modular_office_layout(self) -> None:
         workspace_id = self.workspace["id"]
-        layout = {"schema_version": 2, "furniture_instances": [{"id": "chair-1", "assetId": "chair.office.black.01", "position": {"x": 10, "y": 20}, "orientation": "north_east", "createdAt": "now"}], "agent_seat_assignments": {"ana": "chair-1"}}
+        layout = {"schema_version": 3, "furniture_instances": [{"id": "chair-1", "assetId": "chair.office.black.01", "position": {"x": 10, "y": 20}, "orientation": "north_east", "createdAt": "now"}], "furniture_groups": [{"id": "station-ana", "name": "Estação ana", "instanceIds": ["chair-1"], "groupType": "workstation"}], "agent_seat_assignments": {"ana": "chair-1"}}
         self.assertEqual(self.client.put(f"/workspaces/{workspace_id}/office-layout", json=layout).status_code, 200)
         saved = self.client.get(f"/workspaces/{workspace_id}/office-layout").json()
-        self.assertEqual(saved["schemaVersion"], 2)
+        self.assertEqual(saved["schemaVersion"], 3)
         self.assertEqual(saved["furnitureInstances"], layout["furniture_instances"])
+        self.assertEqual(saved["furnitureGroups"], layout["furniture_groups"])
         self.assertEqual(saved["agentSeatAssignments"], layout["agent_seat_assignments"])
 
     def test_rejects_two_agents_in_the_same_cell(self) -> None:

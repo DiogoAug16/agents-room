@@ -12,7 +12,7 @@ import { IdleBehaviorController, type IdleBehaviorType } from "./idle-behavior-c
 import { NavigationGrid } from "./maps/navigation-grid";
 import { homeSeatForAgent, IDLE_POINTS, isInsideEmptyRoomFloor, MEETING_AREAS, STATIC_SEATS, staticObstacleKeys, WORKSTATION_CELLS, WORKSTATIONS, type SeatAnchor } from "./maps/office-layout";
 import { SeatRegistry, sameGridPoint, seatApproachWorldPosition, seatedWorldPosition } from "./maps/seats";
-import { furnitureAsset, furnitureCells, type AgentSeatAssignments, type FurnitureInstance } from "./furniture/catalog";
+import { FURNITURE_ASSETS, furnitureAsset, furnitureCells, type AgentSeatAssignments, type FurnitureInstance } from "./furniture/catalog";
 
 type DrawnAgent = { body: Phaser.GameObjects.Container; station: Phaser.GameObjects.Container; sprite: Phaser.GameObjects.Sprite; status: Phaser.GameObjects.Arc; data: Agent; currentCell: Agent["position"]; seatId?: string; idleToken: number };
 type FurnitureLayers = { rear: Phaser.GameObjects.Sprite; front?: Phaser.GameObjects.Sprite };
@@ -50,9 +50,7 @@ export class OfficeScene extends Phaser.Scene {
     const assetPath = window.location.protocol === "file:" ? "./" : "/";
     this.load.image("office", `${assetPath}cenario_completo_vazio_sprite.png`);
     this.load.image("office-modular", `${assetPath}assets_cenario_2_modular.png`);
-    ["chair.office.black.01", "desk.work.light.01", "sofa.blue.01", "plant.floor.monstera.01"].forEach((id) => {
-      const asset = furnitureAsset(id)!; this.load.image(`furniture-${id}`, `${assetPath}${asset.image}`);
-    });
+    FURNITURE_ASSETS.forEach((asset) => this.load.image(`furniture-${asset.id}`, `${assetPath}${asset.image}`));
     [1, 2, 3].forEach((index) => this.load.spritesheet(`agent-${index}`, `${assetPath}personagem_${index}_asset.png`, { frameWidth: 256, frameHeight: 256 }));
   }
 
@@ -146,10 +144,10 @@ export class OfficeScene extends Phaser.Scene {
     }
     drawn.data = agent;
     drawn.body.setDepth(screen.y);
-    drawn.station.setPosition(screen.x, screen.y).setDepth(screen.y - 1).setVisible(this.editMode);
+    const homeSeat = this.modularHomeSeat(agent);
+    drawn.station.setPosition(screen.x, screen.y).setDepth(screen.y - 1).setVisible(this.editMode && !homeSeat);
     drawn.status.setFillStyle(this.statusColor(agent.status));
     this.playVisualState(drawn.sprite, agent);
-    const homeSeat = this.modularHomeSeat(agent);
     if (homeSeat && this.isSeatVisualState(agent.status) && (drawn.seatId === homeSeat.id || (!drawn.seatId && sameGridPoint(drawn.currentCell, agent.position)))) this.attachAgentToSeat(drawn, homeSeat, agent.status === "working");
     else if (this.isSeatVisualState(agent.status) && !homeSeat) drawn.sprite.stop().setFrame(8);
     else if (!drawn.seatId) { drawn.currentCell = { ...agent.position }; this.tweens.add({ targets: drawn.body, x: screen.x, y: screen.y, duration: 240, ease: "Sine.out" }); }
@@ -195,16 +193,26 @@ export class OfficeScene extends Phaser.Scene {
 
   private previewFurniture(id: string, pointer: Phaser.Input.Pointer) {
     const point = this.cameras.main.getWorldPoint(pointer.x, pointer.y); const cell = screenToGrid(point.x, point.y); const screen = gridToScreen(cell);
-    const layers = this.furnitureSprites.get(id); if (layers) { layers.rear.setPosition(screen.x, screen.y).setAlpha(0.58); layers.front?.setPosition(screen.x, screen.y).setAlpha(0.58); }
+    const pivot = this.furnitureItems.find((item) => item.id === id); if (!pivot) return;
+    const delta = { x: cell.x - pivot.position.x, y: cell.y - pivot.position.y };
+    this.movingFurniture(id).forEach((item) => {
+      const layers = this.furnitureSprites.get(item.id); const position = gridToScreen({ x: item.position.x + delta.x, y: item.position.y + delta.y });
+      if (layers) { layers.rear.setPosition(position.x, position.y).setAlpha(0.58); layers.front?.setPosition(position.x, position.y).setAlpha(0.58); }
+    });
   }
   private moveFurnitureToCell(id: string, pointer: Phaser.Input.Pointer) {
     const point = this.cameras.main.getWorldPoint(pointer.x, pointer.y); const cell = screenToGrid(point.x, point.y);
-    const item = this.furnitureItems.find((value) => value.id === id); const asset = item && furnitureAsset(item.assetId);
-    if (!item || !asset || !isInsideGrid(cell)) return;
-    const occupied = furnitureCells(this.furnitureItems.filter((value) => value.id !== id));
-    const cells = asset.footprint.map((offset) => ({ x: cell.x + offset.x, y: cell.y + offset.y }));
-    if (!cells.every(isInsideEmptyRoomFloor) || cells.some((value) => occupied.has(`${value.x},${value.y}`))) { window.dispatchEvent(new Event("furniture:invalid")); return; }
+    const pivot = this.furnitureItems.find((item) => item.id === id); if (!pivot || !isInsideGrid(cell)) return;
+    const moving = this.movingFurniture(id), movingIds = new Set(moving.map((item) => item.id)), delta = { x: cell.x - pivot.position.x, y: cell.y - pivot.position.y };
+    const occupied = furnitureCells(this.furnitureItems.filter((item) => !movingIds.has(item.id)));
+    const cells = moving.flatMap((item) => furnitureAsset(item.assetId)!.footprint.map((offset) => ({ x: item.position.x + delta.x + offset.x, y: item.position.y + delta.y + offset.y })));
+    if (!cells.every(isInsideEmptyRoomFloor) || cells.some((value) => occupied.has(`${value.x},${value.y}`))) { this.renderFurniture(this.furnitureItems); window.dispatchEvent(new Event("furniture:invalid")); return; }
     window.dispatchEvent(new CustomEvent("furniture:move", { detail: { id, position: cell } }));
+  }
+
+  private movingFurniture(id: string) {
+    const pivot = this.furnitureItems.find((item) => item.id === id);
+    return pivot?.groupId ? this.furnitureItems.filter((item) => item.groupId === pivot.groupId) : pivot ? [pivot] : [];
   }
 
   private moveToCell(id: string, pointer: Phaser.Input.Pointer) {
