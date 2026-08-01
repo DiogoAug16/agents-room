@@ -182,20 +182,24 @@ export class OfficeScene extends Phaser.Scene {
         if (!item.parentId) rear.setInteractive({ useHandCursor: true }).on("pointerdown", (pointer: Phaser.Input.Pointer) => { pointer.event.stopPropagation(); if (this.editMode) { this.furnitureDrag = item.id; window.dispatchEvent(new CustomEvent("furniture:select", { detail: item.id })); } });
         const frontCropStart = asset.frontOcclusionStart;
         const front = frontCropStart === undefined ? undefined : this.add.sprite(screen.x, screen.y, texture).setOrigin(origin.x, origin.y).setScale(asset.defaultScale ?? 0.75);
-        if (front) {
-          const image = this.textures.get(texture).getSourceImage() as { width: number; height: number };
-          const start = Math.round(image.height * frontCropStart!);
-          front.setCrop(0, start, image.width, image.height - start);
-        }
         layers = { rear, front }; this.furnitureSprites.set(item.id, layers);
       } else if (layers.rear.texture.key !== texture) {
         layers.rear.setTexture(texture); layers.front?.setTexture(texture);
       }
       const origin = furnitureOrigin(asset, item.orientation);
       layers.rear.setOrigin(origin.x, origin.y); layers.front?.setOrigin(origin.x, origin.y);
-      layers.rear.setPosition(screen.x, screen.y).setDepth(screen.y + (item.parentId ? 5 : -4)).setAlpha(this.editMode ? 1 : 0.96);
-      layers.front?.setPosition(screen.x, screen.y).setDepth(screen.y + 4).setAlpha(this.editMode ? 1 : 0.96);
+      this.applyFurnitureLayerCrops(layers, asset, texture);
+      layers.rear.setPosition(screen.x, screen.y).setDepth(screen.y + (item.parentId ? 5 : layers.front ? -14 : -4)).setAlpha(this.editMode ? 1 : 0.96);
+      layers.front?.setPosition(screen.x, screen.y).setDepth(screen.y + 10).setAlpha(this.editMode ? 1 : 0.96);
     });
+  }
+
+  private applyFurnitureLayerCrops(layers: FurnitureLayers, asset: ReturnType<typeof furnitureAsset>, texture: string) {
+    if (!layers.front || !asset?.frontOcclusionStart) { layers.rear.setCrop(); return; }
+    const image = this.textures.get(texture).getSourceImage() as { width: number; height: number };
+    const start = Math.round(image.height * asset.frontOcclusionStart);
+    layers.rear.setCrop(0, 0, image.width, start);
+    layers.front.setCrop(0, start, image.width, image.height - start);
   }
 
   private previewFurniture(id: string, pointer: Phaser.Input.Pointer) {

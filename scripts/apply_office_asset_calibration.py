@@ -71,6 +71,11 @@ def apply_calibration(manifest: dict[str, Any], calibration: dict[str, Any]) -> 
         "footprint": footprint,
         "interactionPoints": interaction_points(calibration.get("interactionPoints", [])),
     }
+    front_occlusion_start = calibration.get("frontOcclusionStart")
+    if front_occlusion_start is not None:
+        if not isinstance(front_occlusion_start, (int, float)) or not 0 < front_occlusion_start < 1:
+            raise ValueError("frontOcclusionStart must be normalized between 0 and 1")
+        runtime["frontOcclusionStart"] = front_occlusion_start
     if calibration.get("seat") is not None:
         seat = calibration["seat"]
         if not isinstance(seat, dict) or seat.get("facing") not in CARDINAL_DIRECTIONS:

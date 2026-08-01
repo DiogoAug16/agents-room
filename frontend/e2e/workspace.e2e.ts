@@ -82,5 +82,6 @@ test("opens the development asset calibration editor", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Cadeira executiva" })).toBeVisible();
   await page.getByLabel("Orientação").selectOption("south_east");
   await expect(page.getByLabel("Direção do assento")).toHaveValue("east");
+  await expect(page.getByLabel("Início da oclusão frontal")).toHaveValue("0.58");
   await expect(page.getByRole("button", { name: "Exportar JSON" })).toBeVisible();
 });

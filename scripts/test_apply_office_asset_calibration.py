@@ -28,6 +28,12 @@ class CalibrationImportTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             apply_calibration(manifest, calibration)
 
+    def test_rejects_invalid_occlusion_boundary(self):
+        manifest = {"assets": [{"id": "chair", "orientation": "north_east", "crop": [0, 0, 100, 100]}]}
+        calibration = {"assetId": "chair", "orientation": "north_east", "origin": {"x": 0, "y": 0}, "footprint": [], "frontOcclusionStart": 1}
+        with self.assertRaises(ValueError):
+            apply_calibration(manifest, calibration)
+
 
 if __name__ == "__main__":
     unittest.main()

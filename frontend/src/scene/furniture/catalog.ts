@@ -10,7 +10,7 @@ export type FurnitureInteractionPoint = { id: string; furnitureId: string; gridP
 export type FurnitureSeat = { anchor: GridPoint; approach: GridPoint; facing: Direction; offset: GridPoint };
 export type FurnitureAsset = { id: string; name: string; category: FurnitureCategory; image: string; footprint: GridPoint[]; navigationPadding: number; orientations?: Partial<Record<FurnitureOrientation, string>>; seatByOrientation?: Partial<Record<FurnitureOrientation, FurnitureSeat>>; originByOrientation?: Partial<Record<FurnitureOrientation, GridPoint>>; defaultScale?: number; surface?: { hostCategories: FurnitureCategory[]; offset: GridPoint }; seat?: FurnitureSeat; interactionPoints?: Array<{ id: string; offset: GridPoint; facing?: Direction; capacity: number; actionTypes: string[] }>; frontOcclusionStart?: number; };
 
-type FurnitureCalibration = { originNormalized?: GridPoint; footprint?: GridPoint[]; seat?: FurnitureSeat; interactionPoints?: Array<{ id: string; offset: GridPoint; facing?: Direction; capacity: number; actionTypes: string[] }> };
+type FurnitureCalibration = { originNormalized?: GridPoint; footprint?: GridPoint[]; seat?: FurnitureSeat; interactionPoints?: Array<{ id: string; offset: GridPoint; facing?: Direction; capacity: number; actionTypes: string[] }>; frontOcclusionStart?: number };
 type FurnitureCalibrations = Partial<Record<string, Partial<Record<FurnitureOrientation, FurnitureCalibration>>>>;
 
 const BASE_FURNITURE_ASSETS: FurnitureAsset[] = [
@@ -36,6 +36,7 @@ const calibratedAsset = (asset: FurnitureAsset): FurnitureAsset => {
     ...asset,
     footprint: defaultCalibration?.footprint ?? asset.footprint,
     interactionPoints: defaultCalibration?.interactionPoints ?? asset.interactionPoints,
+    frontOcclusionStart: defaultCalibration?.frontOcclusionStart ?? asset.frontOcclusionStart,
     originByOrientation: { ...asset.originByOrientation, ...Object.fromEntries(Object.entries(byOrientation).flatMap(([orientation, value]) => value?.originNormalized ? [[orientation, value.originNormalized]] : [])) },
     seatByOrientation: { ...asset.seatByOrientation, ...Object.fromEntries(Object.entries(byOrientation).flatMap(([orientation, value]) => value?.seat ? [[orientation, value.seat]] : [])) },
   };
