@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import type { Agent } from "../types";
-import { defaultFurnitureOrientation, furnitureAsset, furnitureCells, furnitureOrientations, type AgentSeatAssignments, type FurnitureGroup, type FurnitureInstance, type FurnitureOrientation } from "../scene/furniture/catalog";
+import { defaultFurnitureOrientation, furnitureAsset, furnitureCells, furnitureOrientations, movedFurnitureInstances, type AgentSeatAssignments, type FurnitureGroup, type FurnitureInstance, type FurnitureOrientation } from "../scene/furniture/catalog";
 import { isInsideEmptyRoomFloor } from "../scene/maps/office-layout";
 
 type LayoutSnapshot = { furniture: FurnitureInstance[]; furnitureGroups: FurnitureGroup[]; agentSeatAssignments: AgentSeatAssignments };
@@ -10,13 +10,6 @@ const initialAgents: Agent[] = [
   { id: "ana", name: "Ana", role: "Engenharia", description: "Implementa e revisa serviços.", color: 0x5ca6d8, status: "working", direction: "north", position: { x: 10, y: 23 }, basePosition: { x: 10, y: 23 }, skills: ["fastapi"], skillStates: [{ id: "fastapi", enabled: true }], pluginStates: [], task: "Validando adapter Codex" },
   { id: "bruno", name: "Bruno", role: "Qualidade", description: "Cria testes e avalia mudanças.", color: 0xd18b64, status: "seated", direction: "west", position: { x: 10, y: 14 }, basePosition: { x: 10, y: 14 }, skills: ["testing"], skillStates: [{ id: "testing", enabled: true }], pluginStates: [] },
 ];
-
-function movingIds(furniture: FurnitureInstance[], id: string) {
-  const pivot = furniture.find((item) => item.id === id); if (!pivot) return new Set<string>();
-  const ids = new Set(furniture.filter((item) => item.id === id || (pivot.groupId && item.groupId === pivot.groupId)).map((item) => item.id));
-  furniture.filter((item) => item.parentId && ids.has(item.parentId)).forEach((item) => ids.add(item.id));
-  return ids;
-}
 
 function removalIds(furniture: FurnitureInstance[], id: string) {
   const ids = new Set([id]);
@@ -123,10 +116,8 @@ export const useSceneStore = create<SceneStore>((set) => ({
     return added;
   },
   moveFurniture: (id, position) => set((state) => {
-    const pivot = state.furniture.find((item) => item.id === id); if (!pivot) return state;
-    const delta = { x: position.x - pivot.position.x, y: position.y - pivot.position.y };
-    const ids = movingIds(state.furniture, id);
-    return { furniture: state.furniture.map((item) => ids.has(item.id) ? { ...item, position: { x: item.position.x + delta.x, y: item.position.y + delta.y } } : item), furniturePast: [...state.furniturePast, snapshot(state)], furnitureFuture: [] };
+    const furniture = movedFurnitureInstances(state.furniture, id, position); if (!furniture) return state;
+    return { furniture, furniturePast: [...state.furniturePast, snapshot(state)], furnitureFuture: [] };
   }),
   removeFurniture: (id) => set((state) => {
     const ids = removalIds(state.furniture, id);

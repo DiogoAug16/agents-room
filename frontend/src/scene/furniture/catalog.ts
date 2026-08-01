@@ -55,6 +55,21 @@ export const furnitureOrigin = (asset: FurnitureAsset, orientation: FurnitureOri
 export const defaultFurnitureOrientation = (assetId: string): FurnitureOrientation => { const asset = furnitureAsset(assetId); return asset ? furnitureOrientations(asset)[0] : "north_east"; };
 export const furnitureSeat = (asset: FurnitureAsset, orientation: FurnitureOrientation) => asset.seatByOrientation?.[orientation] ?? asset.seat;
 export const furnitureSeats = (asset: FurnitureAsset) => asset.seats ?? (asset.seat ? [{ id: "seat", ...asset.seat }] : []);
+export const linkedFurnitureIds = (items: FurnitureInstance[], id: string) => {
+  const pivot = items.find((item) => item.id === id); if (!pivot) return new Set<string>();
+  const ids = new Set(items.filter((item) => item.id === id || (pivot.groupId && item.groupId === pivot.groupId)).map((item) => item.id));
+  let changed = true;
+  while (changed) {
+    changed = false;
+    items.filter((item) => item.parentId && ids.has(item.parentId) && !ids.has(item.id)).forEach((item) => { ids.add(item.id); changed = true; });
+  }
+  return ids;
+};
+export const movedFurnitureInstances = (items: FurnitureInstance[], id: string, position: GridPoint) => {
+  const pivot = items.find((item) => item.id === id); if (!pivot) return undefined;
+  const ids = linkedFurnitureIds(items, id); const delta = { x: position.x - pivot.position.x, y: position.y - pivot.position.y };
+  return items.map((item) => ids.has(item.id) ? { ...item, position: { x: item.position.x + delta.x, y: item.position.y + delta.y } } : item);
+};
 export const furnitureCells = (items: FurnitureInstance[]) => new Map(items.flatMap((item) => {
   const asset = furnitureAsset(item.assetId); if (!asset) return [];
   return asset.footprint.map((offset) => [`${item.position.x + offset.x},${item.position.y + offset.y}`, item.id] as const);

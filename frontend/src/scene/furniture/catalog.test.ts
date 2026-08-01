@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FURNITURE_ASSETS, furnitureCells, furnitureImage, furnitureInteractionPoints, furnitureOrientations, furnitureSeat, furnitureSeats } from "./catalog";
+import { FURNITURE_ASSETS, furnitureCells, furnitureImage, furnitureInteractionPoints, furnitureOrientations, furnitureSeat, furnitureSeats, movedFurnitureInstances } from "./catalog";
 
 describe("furniture catalog", () => {
   it("turns a furniture footprint into blocked grid cells", () => {
@@ -34,5 +34,10 @@ describe("furniture catalog", () => {
   it("keeps the two sofa seats independent", () => {
     const sofa = FURNITURE_ASSETS.find((asset) => asset.id === "sofa.blue.01")!;
     expect(furnitureSeats(sofa)).toMatchObject([{ id: "left", approach: { x: 0, y: 1 } }, { id: "right", approach: { x: 1, y: 1 } }]);
+  });
+
+  it("moves a furniture group together with surface attachments", () => {
+    const items = [{ id: "desk", assetId: "desk.work.light.01", position: { x: 10, y: 20 }, orientation: "north_west" as const, createdAt: "now", groupId: "station" }, { id: "monitor", assetId: "monitor.black.01", position: { x: 10, y: 20 }, orientation: "north_east" as const, createdAt: "now", groupId: "station", parentId: "desk", surfaceOffset: { x: 8, y: -28 } }];
+    expect(movedFurnitureInstances(items, "desk", { x: 12, y: 21 })?.map((item) => item.position)).toEqual([{ x: 12, y: 21 }, { x: 12, y: 21 }]);
   });
 });
