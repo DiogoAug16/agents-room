@@ -1,0 +1,30 @@
+import { useEffect, useMemo, useState } from "react";
+import { FURNITURE_ASSETS, furnitureAsset, furnitureOrientations, type FurnitureOrientation } from "../scene/furniture/catalog";
+import { assetEditorDocument, type AssetEditorDocument } from "./asset-editor-model";
+
+const number = (value: string) => Number.isFinite(Number(value)) ? Number(value) : 0;
+
+function PointInputs({ label, point, onChange }: { label: string; point: { x: number; y: number }; onChange: (point: { x: number; y: number }) => void }) {
+  return <label className="asset-point"><span>{label}</span><input aria-label={`${label} x`} type="number" value={point.x} onChange={(event) => onChange({ ...point, x: number(event.target.value) })} /><input aria-label={`${label} y`} type="number" value={point.y} onChange={(event) => onChange({ ...point, y: number(event.target.value) })} /></label>;
+}
+
+export function AssetEditor() {
+  const [assetId, setAssetId] = useState(FURNITURE_ASSETS[0].id);
+  const asset = furnitureAsset(assetId)!;
+  const orientations = furnitureOrientations(asset);
+  const [orientation, setOrientation] = useState<FurnitureOrientation>(orientations[0]);
+  const [draft, setDraft] = useState<AssetEditorDocument>(() => assetEditorDocument(asset, orientations[0]));
+  useEffect(() => { const next = furnitureAsset(assetId)!; const nextOrientation = furnitureOrientations(next)[0]; setOrientation(nextOrientation); setDraft(assetEditorDocument(next, nextOrientation)); }, [assetId]);
+  const previewUrl = useMemo(() => `/${draft.image}`, [draft.image]);
+  const changeOrientation = (next: FurnitureOrientation) => { setOrientation(next); setDraft(assetEditorDocument(asset, next)); };
+  const updateSeat = (key: "anchor" | "approach" | "offset", point: { x: number; y: number }) => setDraft((value) => value.seat ? { ...value, seat: { ...value.seat, [key]: point } } : value);
+  const download = () => { const url = URL.createObjectURL(new Blob([JSON.stringify(draft, null, 2)], { type: "application/json" })); const anchor = document.createElement("a"); anchor.href = url; anchor.download = `${draft.assetId}-${draft.orientation}.json`; anchor.click(); URL.revokeObjectURL(url); };
+  return <main className="asset-editor-shell">
+    <header className="asset-editor-header"><div><span className="brand-mark">AR</span><strong>Calibração de assets</strong><small>somente desenvolvimento</small></div><a className="button" href="/">Voltar ao workspace</a></header>
+    <section className="asset-editor-grid">
+      <aside className="asset-editor-panel"><p className="section-label">ASSET</p><select aria-label="Asset" value={assetId} onChange={(event) => setAssetId(event.target.value)}>{FURNITURE_ASSETS.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select><p className="section-label">ORIENTAÇÃO</p><select aria-label="Orientação" value={orientation} onChange={(event) => changeOrientation(event.target.value as FurnitureOrientation)}>{orientations.map((item) => <option key={item} value={item}>{item}</option>)}</select><div className="asset-preview"><img src={previewUrl} alt={`Preview ${asset.name}`} /></div><code>{draft.image}</code></aside>
+      <section className="asset-editor-panel asset-editor-form"><div className="asset-editor-title"><div><p className="section-label">CALIBRAÇÃO</p><h1>{asset.name}</h1></div><button className="primary" onClick={download}>Exportar JSON</button></div><div className="asset-editor-section"><h2>Origem normalizada</h2><PointInputs label="Origem" point={draft.origin} onChange={(origin) => setDraft((value) => ({ ...value, origin }))} /></div><div className="asset-editor-section"><h2>Footprint</h2>{draft.footprint.map((point, index) => <div className="asset-row" key={`${index}-${point.x}-${point.y}`}><PointInputs label={`Vértice ${index + 1}`} point={point} onChange={(next) => setDraft((value) => ({ ...value, footprint: value.footprint.map((item, itemIndex) => itemIndex === index ? next : item) }))} /><button className="button" onClick={() => setDraft((value) => ({ ...value, footprint: value.footprint.filter((_, itemIndex) => itemIndex !== index) }))}>Remover</button></div>)}<button className="button" onClick={() => setDraft((value) => ({ ...value, footprint: [...value.footprint, { x: 0, y: 0 }] }))}>+ Vértice</button></div>{draft.seat && <div className="asset-editor-section"><h2>Assento</h2><PointInputs label="Âncora" point={draft.seat.anchor} onChange={(point) => updateSeat("anchor", point)} /><PointInputs label="Aproximação" point={draft.seat.approach} onChange={(point) => updateSeat("approach", point)} /><PointInputs label="Offset" point={draft.seat.offset} onChange={(point) => updateSeat("offset", point)} /><label>Direção<select aria-label="Direção do assento" value={draft.seat.facing} onChange={(event) => setDraft((value) => value.seat ? { ...value, seat: { ...value.seat, facing: event.target.value } } : value)}>{["north", "south", "east", "west"].map((item) => <option key={item}>{item}</option>)}</select></label></div>}<div className="asset-editor-section"><h2>Pontos de interação</h2>{draft.interactionPoints.map((point, index) => <div className="asset-row" key={`${point.id}-${index}`}><PointInputs label={point.id} point={point.offset} onChange={(offset) => setDraft((value) => ({ ...value, interactionPoints: value.interactionPoints.map((item, itemIndex) => itemIndex === index ? { ...item, offset } : item) }))} /><button className="button" onClick={() => setDraft((value) => ({ ...value, interactionPoints: value.interactionPoints.filter((_, itemIndex) => itemIndex !== index) }))}>Remover</button></div>)}<button className="button" onClick={() => setDraft((value) => ({ ...value, interactionPoints: [...value.interactionPoints, { id: `point-${value.interactionPoints.length + 1}`, offset: { x: 0, y: 1 }, capacity: 1, actionTypes: ["idle"] }] }))}>+ Ponto</button></div></section>
+      <aside className="asset-editor-panel"><p className="section-label">JSON</p><pre>{JSON.stringify(draft, null, 2)}</pre></aside>
+    </section>
+  </main>;
+}

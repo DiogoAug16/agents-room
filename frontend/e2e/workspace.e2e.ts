@@ -76,3 +76,11 @@ test("builds a grouped workstation for the selected agent", async ({ page }) => 
   await page.getByRole("button", { name: /Planta de mesa/ }).click();
   await expect(page.getByRole("button", { name: /Planta de mesa.*1 na sala/ })).toBeVisible();
 });
+
+test("opens the development asset calibration editor", async ({ page }) => {
+  await page.goto("/dev/asset-editor");
+  await expect(page.getByRole("heading", { name: "Cadeira executiva" })).toBeVisible();
+  await page.getByLabel("Orientação").selectOption("south_east");
+  await expect(page.getByLabel("Direção do assento")).toHaveValue("east");
+  await expect(page.getByRole("button", { name: "Exportar JSON" })).toBeVisible();
+});
