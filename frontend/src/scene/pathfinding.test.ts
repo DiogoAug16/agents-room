@@ -3,7 +3,7 @@ import { cellKey, findNavigationPath, findPath, releaseReservation, reserveRoute
 import { NavigationGrid } from "./maps/navigation-grid";
 
 describe("A* pathfinding", () => {
-  it("routes around a blocked cell without diagonal moves", () => {
+  it("routes around a blocked cell without cutting its diagonal corners", () => {
     const path = findPath({ x: 2, y: 2 }, { x: 4, y: 2 }, new Set([cellKey({ x: 3, y: 2 })]));
     expect(path).toEqual([{ x: 2, y: 2 }, { x: 2, y: 1 }, { x: 3, y: 1 }, { x: 4, y: 1 }, { x: 4, y: 2 }]);
   });
@@ -26,11 +26,15 @@ describe("A* pathfinding", () => {
     ]);
   });
 
+  it("does not cross a blocked corner diagonally", () => {
+    expect(findPath({ x: 0, y: 0 }, { x: 1, y: 1 }, new Set(["1,0", "0,1"]))).toBeNull();
+  });
+
   it("uses only declared navigation cells and reaches a chair approach", () => {
     const navigation = new NavigationGrid();
-    const path = findNavigationPath({ x: 11, y: 24 }, { x: 11, y: 14 }, navigation, "ana", new Set());
-    expect(path?.at(-1)).toEqual({ x: 11, y: 14 });
+    const path = findNavigationPath({ x: 10, y: 25 }, { x: 11, y: 16 }, navigation, "ana", new Set());
+    expect(path?.at(-1)).toEqual({ x: 11, y: 16 });
     expect(path?.every((point) => navigation.cellAt(point)?.walkable)).toBe(true);
-    expect(findNavigationPath({ x: 11, y: 24 }, { x: 12, y: 13 }, navigation, "ana", new Set())).toBeNull();
+    expect(findNavigationPath({ x: 10, y: 25 }, { x: 10, y: 14 }, navigation, "ana", new Set())).toBeNull();
   });
 });

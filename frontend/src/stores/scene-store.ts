@@ -2,8 +2,8 @@ import { create } from "zustand";
 import type { Agent } from "../types";
 
 const initialAgents: Agent[] = [
-  { id: "ana", name: "Ana", role: "Engenharia", description: "Implementa e revisa serviços.", color: 0x5ca6d8, status: "working", direction: "north", position: { x: 11, y: 23 }, basePosition: { x: 11, y: 23 }, skills: ["fastapi"], skillStates: [{ id: "fastapi", enabled: true }], pluginStates: [], task: "Validando adapter Codex" },
-  { id: "bruno", name: "Bruno", role: "Qualidade", description: "Cria testes e avalia mudanças.", color: 0xd18b64, status: "seated", direction: "north", position: { x: 11, y: 13 }, basePosition: { x: 11, y: 13 }, skills: ["testing"], skillStates: [{ id: "testing", enabled: true }], pluginStates: [] },
+  { id: "ana", name: "Ana", role: "Engenharia", description: "Implementa e revisa serviços.", color: 0x5ca6d8, status: "working", direction: "north", position: { x: 10, y: 23 }, basePosition: { x: 10, y: 23 }, skills: ["fastapi"], skillStates: [{ id: "fastapi", enabled: true }], pluginStates: [], task: "Validando adapter Codex" },
+  { id: "bruno", name: "Bruno", role: "Qualidade", description: "Cria testes e avalia mudanças.", color: 0xd18b64, status: "seated", direction: "west", position: { x: 10, y: 14 }, basePosition: { x: 10, y: 14 }, skills: ["testing"], skillStates: [{ id: "testing", enabled: true }], pluginStates: [] },
 ];
 
 type SceneStore = {
@@ -30,7 +30,7 @@ export const useSceneStore = create<SceneStore>((set) => ({
     if (state.agents.length >= 8) return state;
     const index = state.agents.length;
     const id = crypto.randomUUID();
-    const positions = [{ x: 5, y: 23 }, { x: 11, y: 23 }, { x: 11, y: 13 }, { x: 5, y: 13 }, { x: 11, y: 10 }, { x: 21, y: 5 }, { x: 22, y: 12 }, { x: 32, y: 21 }]; const position = positions[index];
+    const positions = [{ x: 4, y: 23 }, { x: 10, y: 23 }, { x: 3, y: 11 }, { x: 6, y: 13 }, { x: 10, y: 14 }, { x: 10, y: 12 }, { x: 9, y: 8 }, { x: 20, y: 10 }]; const position = positions[index];
     return { agents: [...state.agents, { id, name, role, description: "Novo agente do workspace.", color: [0x85ba82, 0xa786d4, 0xe0ae59][index % 3], status: "idle", direction: "north", position, basePosition: position, skills: [], skillStates: [], pluginStates: [] }], selectedId: id };
   }),
   removeSelected: () => set((state) => ({ agents: state.agents.filter((agent) => agent.id !== state.selectedId), selectedId: undefined })),

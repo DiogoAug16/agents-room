@@ -202,7 +202,7 @@ export class OfficeScene extends Phaser.Scene {
   private async returnToWorkstation(agent: DrawnAgent, token?: number) {
     const seat = this.homeSeat(agent.data); if (!this.seats.reserve(seat, agent.data.id)) return false;
     const route = this.planRoute(agent.data.id, agent.currentCell, seat.approachPosition); if (!route) { this.seats.release(seat, agent.data.id); return false; }
-    await this.walk(agent, route, token);
+    if (!await this.walk(agent, route, token)) { this.seats.release(seat, agent.data.id); return false; }
     if (token !== undefined && token !== agent.idleToken) { this.seats.release(seat, agent.data.id); return false; }
     const attached = this.attachAgentToSeat(agent, seat, agent.data.status === "working");
     if (!attached) this.seats.release(seat, agent.data.id);
@@ -225,7 +225,7 @@ export class OfficeScene extends Phaser.Scene {
     this.activeInteractions.add(interaction.interactionId); this.activeInteractions.add(source.data.id); this.activeInteractions.add(target.data.id);
     window.dispatchEvent(new CustomEvent("interaction:started", { detail: interaction }));
     try {
-      await this.walk(source, route);
+      if (!await this.walk(source, route)) { window.dispatchEvent(new CustomEvent("interaction:failed", { detail: interaction })); return; }
       target.sprite.stop().setFrame(8);
       const bubble = this.add.text(target.body.x, target.body.y - 138, interaction.summary, { fontFamily: "Inter, sans-serif", fontSize: "14px", color: "#18252c", backgroundColor: "#f5fbfd", wordWrap: { width: 260 }, padding: { x: 10, y: 7 } }).setOrigin(0.5).setDepth(99999);
       await this.wait(1600);
@@ -239,17 +239,29 @@ export class OfficeScene extends Phaser.Scene {
     }
   }
 
-  private async walk(agent: DrawnAgent, route: Agent["position"][], token?: number) {
-    for (let index = 1; index < route.length; index++) {
-      if (token !== undefined && token !== agent.idleToken) return;
-      const previous = route[index - 1], next = route[index];
+  private async walk(agent: DrawnAgent, route: Agent["position"][], token?: number): Promise<boolean> {
+    const destination = route.at(-1)!; let activeRoute = route; let index = 1; let repaths = 0;
+    while (index < activeRoute.length) {
+      if (token !== undefined && token !== agent.idleToken) return false;
+      const previous = activeRoute[index - 1], next = activeRoute[index];
+      const blocked = this.blockedCellsFor(agent.data.id);
+      if (!this.navigation.canEnter(next, agent.data.id, blocked) || !reserveRoute(this.routeReservations, agent.data.id, activeRoute.slice(index - 1, index + 2))) {
+        if (repaths++ >= 3) return false;
+        releaseAgentReservations(this.routeReservations, agent.data.id);
+        const replanned = this.planRoute(agent.data.id, agent.currentCell, destination);
+        if (!replanned) return false;
+        activeRoute = replanned; index = 1; continue;
+      }
       agent.sprite.play(`${this.textureFor(agent.data)}-walk-${next.x > previous.x ? "east" : next.x < previous.x ? "west" : next.y > previous.y ? "south" : "north"}`, true);
       const screen = gridToScreen(next);
       await new Promise<void>((resolve) => this.tweens.add({ targets: agent.body, x: screen.x, y: screen.y, duration: 180, ease: "Sine.out", onComplete: () => resolve() }));
       agent.currentCell = { ...next };
       releaseReservation(this.routeReservations, agent.data.id, previous);
+      index += 1;
     }
     agent.sprite.stop();
+    releaseReservation(this.routeReservations, agent.data.id, agent.currentCell);
+    return true;
   }
 
   private blockedCellsFor(agentId: string) {
@@ -298,14 +310,19 @@ export class OfficeScene extends Phaser.Scene {
   private async runIdleBehavior(agentId: string, behavior: IdleBehaviorType) {
     const agent = this.agents.get(agentId); if (!agent || !this.canRunIdle(agentId)) return; const token = ++agent.idleToken;
     if (behavior === "remain_seated") { await this.wait(1200); return; }
-    if (behavior === "typing") { agent.sprite.play(`${this.textureFor(agent.data)}-typing-north`, true); await this.wait(2200); if (token === agent.idleToken) agent.sprite.stop().setFrame(this.seatedFrame("north")); return; }
-    if (behavior === "look_around") { agent.sprite.stop().setFrame(this.seatedFrame("east")); await this.wait(1400); if (token === agent.idleToken) agent.sprite.stop().setFrame(this.seatedFrame("north")); return; }
+    const homeFacing = this.homeSeat(agent.data).facing;
+    if (behavior === "typing") { agent.sprite.play(`${this.textureFor(agent.data)}-typing-${homeFacing}`, true); await this.wait(2200); if (token === agent.idleToken) agent.sprite.stop().setFrame(this.seatedFrame(homeFacing)); return; }
+    if (behavior === "look_around") { agent.sprite.stop().setFrame(this.seatedFrame(homeFacing)); await this.wait(1400); return; }
     if (behavior === "join_idle_meeting") { await this.runIdleMeeting(agent, token); return; }
     const targetSeat = behavior === "sit_on_sofa" ? STATIC_SEATS.find((seat) => seat.type === "sofa_seat" && this.seats.reserve(seat, agentId)) : undefined;
     const targetPoint = targetSeat ? targetSeat.approachPosition : this.reserveIdlePoint(agentId)?.gridPosition;
     if (!targetPoint) return;
     this.leaveSeatForWalking(agent); const route = this.planRoute(agentId, agent.currentCell, targetPoint); if (!route) { if (targetSeat) this.seats.release(targetSeat, agentId); this.idlePointOwners.forEach((owner, id) => { if (owner === agentId) this.idlePointOwners.delete(id); }); return; }
-    await this.walk(agent, route, token); if (token !== agent.idleToken) return;
+    if (!await this.walk(agent, route, token) || token !== agent.idleToken) {
+      if (targetSeat) this.seats.release(targetSeat, agentId);
+      this.idlePointOwners.forEach((owner, id) => { if (owner === agentId) this.idlePointOwners.delete(id); });
+      return;
+    }
     if (targetSeat) this.attachAgentToSeat(agent, targetSeat);
     await this.wait(behavior === "short_walk" ? 900 : 2600);
     if (targetSeat) this.detachAgentFromSeat(agent, targetSeat);
@@ -319,7 +336,7 @@ export class OfficeScene extends Phaser.Scene {
     try {
       const hostRoute = this.planRoute(host.data.id, host.currentCell, seats[0].approachPosition), peerRoute = this.planRoute(peer.data.id, peer.currentCell, seats[1].approachPosition);
       if (!hostRoute || !peerRoute) return;
-      await Promise.all([this.walk(host, hostRoute, token), this.walk(peer, peerRoute, ++peer.idleToken)]); if (token !== host.idleToken) return;
+      const [hostArrived, peerArrived] = await Promise.all([this.walk(host, hostRoute, token), this.walk(peer, peerRoute, ++peer.idleToken)]); if (!hostArrived || !peerArrived || token !== host.idleToken) return;
       this.attachAgentToSeat(host, seats[0]); this.attachAgentToSeat(peer, seats[1]);
       const bubble = this.add.text((host.body.x + peer.body.x) / 2, Math.min(host.body.y, peer.body.y) - 100, "Alinhamento rápido", { fontFamily: "Inter, sans-serif", fontSize: "13px", color: "#18252c", backgroundColor: "#f5fbfd", padding: { x: 8, y: 5 } }).setOrigin(0.5).setDepth(99999);
       await this.wait(2600); bubble.destroy(); this.detachAgentFromSeat(host, seats[0]); this.detachAgentFromSeat(peer, seats[1]); await Promise.all([this.returnToWorkstation(host, token), this.returnToWorkstation(peer)]);

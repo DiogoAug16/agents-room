@@ -23,7 +23,7 @@ class Workspace(Base):
     name: Mapped[str] = mapped_column(String(120))
     project_root: Mapped[str] = mapped_column(String(2048))
     room_width: Mapped[int] = mapped_column(Integer, default=40)
-    room_height: Mapped[int] = mapped_column(Integer, default=38)
+    room_height: Mapped[int] = mapped_column(Integer, default=42)
     settings: Mapped[dict] = mapped_column(JSON, default=dict)
     agents: Mapped[list["Agent"]] = relationship(back_populates="workspace", cascade="all, delete-orphan")
 

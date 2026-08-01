@@ -17,7 +17,7 @@ class AgentCreate(BaseModel):
 
 class PositionUpdate(BaseModel):
     x: int = Field(ge=0, lt=40)
-    y: int = Field(ge=0, lt=38)
+    y: int = Field(ge=0, lt=42)
 
 
 class SkillAssignment(BaseModel):
