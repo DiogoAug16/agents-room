@@ -59,6 +59,7 @@ export const highlightedFurnitureIds = (items: FurnitureInstance[], groups: Furn
   const group = groups.find((value) => value.id === items.find((item) => item.id === selectedId)?.groupId);
   return group ? group.instanceIds : selectedIds;
 };
+export const assignedAgentIdForFurnitureGroup = (group: FurnitureGroup, assignments: AgentSeatAssignments) => Object.entries(assignments).find(([, seatId]) => group.instanceIds.includes(seatId))?.[0];
 export const linkedFurnitureIds = (items: FurnitureInstance[], id: string) => {
   const pivot = items.find((item) => item.id === id); if (!pivot) return new Set<string>();
   const ids = new Set(items.filter((item) => item.id === id || (pivot.groupId && item.groupId === pivot.groupId)).map((item) => item.id));

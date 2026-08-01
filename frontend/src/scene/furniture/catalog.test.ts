@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FURNITURE_ASSETS, furnitureCells, furnitureGroupCenter, furnitureImage, furnitureInteractionPoints, furnitureOrientations, furnitureSeat, furnitureSeats, highlightedFurnitureIds, movedFurnitureInstances, removableFurnitureIds } from "./catalog";
+import { FURNITURE_ASSETS, assignedAgentIdForFurnitureGroup, furnitureCells, furnitureGroupCenter, furnitureImage, furnitureInteractionPoints, furnitureOrientations, furnitureSeat, furnitureSeats, highlightedFurnitureIds, movedFurnitureInstances, removableFurnitureIds } from "./catalog";
 
 describe("furniture catalog", () => {
   it("turns a furniture footprint into blocked grid cells", () => {
@@ -44,6 +44,11 @@ describe("furniture catalog", () => {
   it("highlights every member of the group containing the active furniture", () => {
     const items = [{ id: "desk", assetId: "desk.work.light.01", position: { x: 10, y: 20 }, orientation: "north_west" as const, createdAt: "now", groupId: "station" }, { id: "chair", assetId: "chair.office.black.01", position: { x: 10, y: 23 }, orientation: "north_east" as const, createdAt: "now", groupId: "station" }];
     expect(highlightedFurnitureIds(items, [{ id: "station", name: "Estação", instanceIds: ["desk", "chair"], groupType: "workstation" }], "chair", ["chair"])).toEqual(["desk", "chair"]);
+  });
+
+  it("finds the agent assigned to a workstation chair", () => {
+    const group = { id: "station", name: "Estação", instanceIds: ["desk", "chair"], groupType: "workstation" as const };
+    expect(assignedAgentIdForFurnitureGroup(group, { ana: "chair", bruno: "other-chair" })).toBe("ana");
   });
 
   it("finds the visual center of a furniture group from its footprints", () => {
