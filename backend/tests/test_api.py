@@ -1,7 +1,9 @@
 import os
 import tempfile
 import unittest
+import asyncio
 from pathlib import Path
+from unittest.mock import patch
 
 TEST_DB = Path(tempfile.gettempdir()) / "agents-room-api-test.db"
 if TEST_DB.exists():
@@ -9,7 +11,10 @@ if TEST_DB.exists():
 os.environ["AGENTS_ROOM_DATABASE_URL"] = f"sqlite:///{TEST_DB}"
 
 from fastapi.testclient import TestClient  # noqa: E402
-from app.main import app  # noqa: E402
+from app.database import SessionLocal  # noqa: E402
+from app.main import app, execute_task  # noqa: E402
+from app.models import AgentSession, Task  # noqa: E402
+from app.codex_provider import ProviderEvent  # noqa: E402
 
 
 class ApiTests(unittest.TestCase):
@@ -79,6 +84,51 @@ class ApiTests(unittest.TestCase):
         agent = self.client.get(f"/workspaces/{workspace_id}/agents").json()[0]
         self.assertEqual(self.client.post(f"/agents/{agent['id']}/plugins", json={"plugin_id": "codex-local"}).status_code, 201)
         self.assertEqual(self.client.post(f"/agents/{agent['id']}/plugins", json={"plugin_id": "codex-local"}).status_code, 409)
+
+    def test_returns_local_catalog_manifests(self) -> None:
+        skills = self.client.get("/skills").json()
+        fastapi = next(skill for skill in skills if skill["id"] == "fastapi")
+        self.assertEqual(fastapi["manifest"]["recommendedPermission"], "workspace_write")
+        plugin = self.client.get("/plugins").json()[0]
+        self.assertEqual(plugin["manifest"]["integrations"], ["codex-cli"])
+        self.assertEqual(plugin["manifest"]["skills"], ["fastapi", "testing", "ui"])
+
+    def test_returns_the_agent_codex_session(self) -> None:
+        agent = self.client.get(f"/workspaces/{self.workspace['id']}/agents").json()[0]
+        session = SessionLocal()
+        agent_session = session.query(AgentSession).filter_by(agent_id=agent["id"]).one_or_none()
+        if agent_session:
+            agent_session.external_session_id = "thread-123"
+        else:
+            session.add(AgentSession(agent_id=agent["id"], provider="codex", external_session_id="thread-123", access_mode="read_only"))
+        session.commit(); session.close()
+        refreshed = self.client.get(f"/workspaces/{self.workspace['id']}/agents").json()[0]
+        self.assertEqual(refreshed["sessionId"], "thread-123")
+
+    def test_persists_and_reuses_the_agent_codex_session(self) -> None:
+        agent = self.client.get(f"/workspaces/{self.workspace['id']}/agents").json()[0]
+        db = SessionLocal()
+        first = Task(workspace_id=self.workspace["id"], agent_id=agent["id"], prompt="primeira", state="queued", access_mode="read_only")
+        db.add(first); db.commit(); first_id = first.id; db.close()
+
+        class FakeProvider:
+            def __init__(self): self.session_ids: list[str | None] = []
+            def run(self, _prompt, _access_mode, session_id=None):
+                self.session_ids.append(session_id)
+                yield ProviderEvent(type="thread.started", summary="Sessão Codex iniciada.", session_id="thread-456")
+            def cancel(self): return True
+
+        provider = FakeProvider()
+        with patch("app.main.CodexAgentProvider", return_value=provider):
+            asyncio.run(execute_task(first_id))
+        db = SessionLocal()
+        session = db.query(AgentSession).filter_by(agent_id=agent["id"]).one()
+        self.assertEqual(session.external_session_id, "thread-456")
+        second = Task(workspace_id=self.workspace["id"], agent_id=agent["id"], prompt="segunda", state="queued", access_mode="read_only")
+        db.add(second); db.commit(); second_id = second.id; db.close()
+        with patch("app.main.CodexAgentProvider", return_value=provider):
+            asyncio.run(execute_task(second_id))
+        self.assertEqual(provider.session_ids, [None, "thread-456"])
 
     def test_disables_an_assigned_plugin(self) -> None:
         workspace_id = self.workspace["id"]

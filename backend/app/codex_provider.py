@@ -29,29 +29,20 @@ class CodexAgentProvider:
     def is_available(self) -> bool:
         return shutil.which(self.executable) is not None
 
-    def command(self, prompt: str, access_mode: str = "read_only") -> list[str]:
+    def command(self, prompt: str, access_mode: str = "read_only", session_id: str | None = None) -> list[str]:
         if not prompt.strip():
             raise ValueError("Task prompt cannot be empty")
         if access_mode not in {"read_only", "workspace_write"}:
             raise ValueError("Unsupported access mode")
-        return [
-            self.executable,
-            "exec",
-            "--json",
-            "--ephemeral",
-            "--skip-git-repo-check",
-            "--sandbox",
-            "read-only" if access_mode == "read_only" else "workspace-write",
-            "--cd",
-            str(self.workspace_root),
-            prompt,
-        ]
+        if session_id:
+            return [self.executable, "exec", "resume", session_id, "--json", "--skip-git-repo-check", prompt]
+        return [self.executable, "exec", "--json", "--skip-git-repo-check", "--sandbox", "read-only" if access_mode == "read_only" else "workspace-write", "--cd", str(self.workspace_root), prompt]
 
-    def run(self, prompt: str, access_mode: str = "read_only") -> Iterator[ProviderEvent]:
+    def run(self, prompt: str, access_mode: str = "read_only", session_id: str | None = None) -> Iterator[ProviderEvent]:
         if not self.is_available():
             raise RuntimeError("Codex CLI is not available on PATH")
         self._process = subprocess.Popen(
-            self.command(prompt, access_mode),
+            self.command(prompt, access_mode, session_id),
             cwd=self.workspace_root,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,

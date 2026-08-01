@@ -18,10 +18,18 @@ test("validates agent creation and switches room modes", async ({ page }) => {
 
   await page.getByLabel("Agente selecionado").selectOption({ label: "Ana · Engenharia" });
   await expect(page.locator(".inspector").getByRole("heading", { name: "Ana" })).toBeVisible();
-  await page.getByRole("button", { name: "FastAPI APIs locais tipadas", exact: true }).click();
+  await page.getByRole("button", { name: "FastAPI Backend · APIs locais tipadas · workspace_write", exact: true }).click();
   await expect(page.locator(".inspector").getByRole("button", { name: "Pausar" })).toBeVisible();
   await page.getByRole("button", { name: "Arrastar Testes" }).dragTo(page.locator(".inspector .skill-list").first());
   await expect(page.locator(".inspector").getByRole("button", { name: "Pausar" })).toHaveCount(2);
+  await page.getByLabel("Buscar skills").fill("Interface");
+  await expect(page.getByRole("button", { name: "Interface Frontend · Fluxos React e acessibilidade · workspace_write", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "FastAPI Backend · APIs locais tipadas · workspace_write", exact: true })).toBeHidden();
+  await page.getByLabel("Buscar skills").fill("");
+  await expect(page.getByLabel("Buscar skills")).toHaveValue("");
+  await page.getByLabel("Filtrar skills por categoria").selectOption("Qualidade");
+  await expect(page.getByRole("button", { name: "Testes Qualidade · Testes e regressões · read_only", exact: true })).toBeVisible();
+  await page.getByLabel("Filtrar skills por categoria").selectOption("all");
 
   await page.getByLabel("Permissão da próxima tarefa").selectOption("workspace_write");
   await page.getByPlaceholder("Descreva uma tarefa…").fill("Revise a configuração local.");

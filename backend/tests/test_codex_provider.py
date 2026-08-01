@@ -11,10 +11,16 @@ class CodexAgentProviderTests(unittest.TestCase):
 
     def test_builds_a_read_only_non_interactive_command(self) -> None:
         command = self.provider.command("liste os arquivos")
-        self.assertEqual(command[:4], ["codex-test", "exec", "--json", "--ephemeral"])
+        self.assertEqual(command[:3], ["codex-test", "exec", "--json"])
         self.assertIn("read-only", command)
         self.assertIn("--skip-git-repo-check", command)
         self.assertEqual(command[-1], "liste os arquivos")
+
+    def test_resumes_a_matching_session(self) -> None:
+        command = self.provider.command("continue", session_id="session-1")
+        self.assertEqual(command[:4], ["codex-test", "exec", "resume", "session-1"])
+        self.assertIn("--json", command)
+        self.assertNotIn("--sandbox", command)
 
     def test_rejects_blank_prompt(self) -> None:
         with self.assertRaises(ValueError):

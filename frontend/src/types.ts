@@ -10,6 +10,7 @@ export type Agent = {
   color: number;
   status: VisualStatus;
   direction: Direction;
+  sessionId?: string | null;
   position: GridPoint;
   basePosition: GridPoint;
   skills: string[];
@@ -18,4 +19,4 @@ export type Agent = {
   task?: string;
 };
 
-export type Skill = { id: string; name: string; description: string; category: string };
+export type Skill = { id: string; name: string; description: string; category: string; manifest?: { version?: string; tags?: string[]; compatibility?: string[]; recommendedPermission?: string; dependencies?: string[] } };

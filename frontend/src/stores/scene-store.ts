@@ -1,15 +1,9 @@
 import { create } from "zustand";
-import type { Agent, Skill } from "../types";
+import type { Agent } from "../types";
 
 const initialAgents: Agent[] = [
   { id: "ana", name: "Ana", role: "Engenharia", description: "Implementa e revisa serviços.", color: 0x5ca6d8, status: "working", direction: "south", position: { x: 8, y: 6 }, basePosition: { x: 8, y: 6 }, skills: ["fastapi"], skillStates: [{ id: "fastapi", enabled: true }], pluginStates: [], task: "Validando adapter Codex" },
   { id: "bruno", name: "Bruno", role: "Qualidade", description: "Cria testes e avalia mudanças.", color: 0xd18b64, status: "seated", direction: "south", position: { x: 14, y: 8 }, basePosition: { x: 14, y: 8 }, skills: ["testing"], skillStates: [{ id: "testing", enabled: true }], pluginStates: [] },
-];
-
-export const skills: Skill[] = [
-  { id: "fastapi", name: "FastAPI", description: "APIs locais tipadas", category: "Backend" },
-  { id: "testing", name: "Testes", description: "Testes e regressões", category: "Qualidade" },
-  { id: "ui", name: "Interface", description: "Fluxos React e acessibilidade", category: "Frontend" },
 ];
 
 type SceneStore = {

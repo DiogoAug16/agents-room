@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session, joinedload
 from .codex_provider import CodexAgentProvider
 from .database import Base, SessionLocal, engine, get_session
 from .events import emit, manager, replay
-from .models import Agent, AgentInteraction, AgentPlugin, AgentSkill, Approval, Plugin, Skill, Task, Workspace, Workstation, now
+from .models import Agent, AgentInteraction, AgentPlugin, AgentSession, AgentSkill, Approval, Plugin, Skill, Task, Workspace, Workstation, now
 from .schemas import AgentCreate, ApprovalDecision, DelegationCreate, InteractionCreate, PluginAssignment, PluginEnabledUpdate, PositionUpdate, SkillAssignment, SkillEnabledUpdate, TaskCreate
 from .workspace_metadata import current_git_branch
 
@@ -25,6 +25,12 @@ FURNITURE_CELLS = frozenset({(10, 7), (11, 7), (12, 7), (13, 7), (10, 8), (11, 8
 MAX_DELEGATION_DEPTH = 2
 MAX_SUBTASKS_PER_TASK = 4
 TASK_TIMEOUT_SECONDS = 600
+SKILL_CATALOG = (
+    {"id": "fastapi", "name": "FastAPI", "description": "APIs locais tipadas", "category": "Backend", "manifest": {"version": "1.0.0", "tags": ["python", "api"], "compatibility": ["codex"], "recommendedPermission": "workspace_write", "dependencies": [], "instructions": "Implemente APIs FastAPI tipadas e teste os contratos."}},
+    {"id": "testing", "name": "Testes", "description": "Testes e regressões", "category": "Qualidade", "manifest": {"version": "1.0.0", "tags": ["tests", "regression"], "compatibility": ["codex"], "recommendedPermission": "read_only", "dependencies": [], "instructions": "Crie testes determinísticos e valide regressões."}},
+    {"id": "ui", "name": "Interface", "description": "Fluxos React e acessibilidade", "category": "Frontend", "manifest": {"version": "1.0.0", "tags": ["react", "accessibility"], "compatibility": ["codex"], "recommendedPermission": "workspace_write", "dependencies": [], "instructions": "Implemente fluxos React acessíveis e valide interação."}},
+)
+CODEX_PLUGIN_MANIFEST = {"version": "1.0.0", "skills": [item["id"] for item in SKILL_CATALOG], "integrations": ["codex-cli"], "apps": [], "mcpServers": [], "environment": [], "permissions": ["read_only", "workspace_write"]}
 
 
 def write_lock_for(project_root: str) -> asyncio.Lock:
@@ -37,7 +43,7 @@ def interaction_points_for(x: int, y: int) -> list[dict[str, int]]:
 
 def agent_payload(agent: Agent) -> dict:
     workstation = agent.workstation
-    return {"id": agent.id, "name": agent.name, "role": agent.role, "description": agent.description, "appearance": agent.appearance, "visualStatus": agent.visual_status, "position": {"x": agent.current_x, "y": agent.current_y}, "basePosition": {"x": agent.base_x, "y": agent.base_y}, "direction": agent.direction, "permission": agent.permission, "workstation": {"position": {"x": workstation.x, "y": workstation.y}, "interactionPoints": workstation.interaction_points} if workstation else None, "skills": [{"id": link.skill.id, "name": link.skill.name, "enabled": link.enabled} for link in agent.skills], "plugins": [{"id": link.plugin.id, "name": link.plugin.name, "enabled": link.enabled} for link in agent.plugins]}
+    return {"id": agent.id, "name": agent.name, "role": agent.role, "description": agent.description, "appearance": agent.appearance, "visualStatus": agent.visual_status, "position": {"x": agent.current_x, "y": agent.current_y}, "basePosition": {"x": agent.base_x, "y": agent.base_y}, "direction": agent.direction, "permission": agent.permission, "sessionId": agent.session.external_session_id if agent.session else None, "workstation": {"position": {"x": workstation.x, "y": workstation.y}, "interactionPoints": workstation.interaction_points} if workstation else None, "skills": [{"id": link.skill.id, "name": link.skill.name, "enabled": link.enabled} for link in agent.skills], "plugins": [{"id": link.plugin.id, "name": link.plugin.name, "enabled": link.enabled} for link in agent.plugins]}
 
 
 def task_payload(task: Task) -> dict:
@@ -69,16 +75,29 @@ def task_descendants(session: Session, root_id: str) -> list[Task]:
     return descendants
 
 
+def ensure_catalog(session: Session) -> None:
+    for item in SKILL_CATALOG:
+        skill = session.get(Skill, item["id"])
+        if skill:
+            skill.name = item["name"]; skill.description = item["description"]; skill.category = item["category"]; skill.manifest = item["manifest"]
+        else:
+            session.add(Skill(**item))
+    plugin = session.get(Plugin, "codex-local")
+    if plugin:
+        plugin.name = "Codex Local"; plugin.description = "Sessões Codex locais para agentes."; plugin.manifest = CODEX_PLUGIN_MANIFEST
+    else:
+        session.add(Plugin(id="codex-local", name="Codex Local", description="Sessões Codex locais para agentes.", manifest=CODEX_PLUGIN_MANIFEST))
+    session.commit()
+
+
 def seed(session: Session) -> Workspace:
     workspace = session.scalar(select(Workspace).limit(1))
     if workspace:
-        if not session.get(Plugin, "codex-local"):
-            session.add(Plugin(id="codex-local", name="Codex Local", description="Sessões Codex locais para agentes.", manifest={"permissions": ["read_only", "workspace_write"]}))
-            session.commit()
+        ensure_catalog(session)
         return workspace
     workspace = Workspace(name="Agents Room", project_root=str(ROOT), settings={"max_agents": 8, "max_parallel_tasks": 3, "cancel_delegations_on_parent_cancel": True})
     session.add(workspace)
-    session.add_all([Skill(id="fastapi", name="FastAPI", description="APIs locais tipadas", category="Backend"), Skill(id="testing", name="Testes", description="Testes e regressões", category="Qualidade"), Skill(id="ui", name="Interface", description="Fluxos React e acessibilidade", category="Frontend"), Plugin(id="codex-local", name="Codex Local", description="Sessões Codex locais para agentes.", manifest={"permissions": ["read_only", "workspace_write"]})])
+    ensure_catalog(session)
     session.flush()
     for index, (name, role, description, x, y) in enumerate((
         ("Ana", "Engenharia", "Implementa e revisa serviços.", 8, 6),
@@ -117,7 +136,7 @@ def get_workspace(session: Session = Depends(get_session)) -> dict:
 
 @app.get("/workspaces/{workspace_id}/agents")
 def list_agents(workspace_id: str, session: Session = Depends(get_session)) -> list[dict]:
-    agents = session.scalars(select(Agent).options(joinedload(Agent.skills).joinedload(AgentSkill.skill), joinedload(Agent.plugins).joinedload(AgentPlugin.plugin)).where(Agent.workspace_id == workspace_id)).unique().all()
+    agents = session.scalars(select(Agent).options(joinedload(Agent.skills).joinedload(AgentSkill.skill), joinedload(Agent.plugins).joinedload(AgentPlugin.plugin), joinedload(Agent.session)).where(Agent.workspace_id == workspace_id)).unique().all()
     return [agent_payload(agent) for agent in agents]
 
 
@@ -255,15 +274,24 @@ async def execute_task(task_id: str) -> None:
         try:
             task.state = "running"; task.agent.visual_status = "working"; session.commit()
             await emit(session, task.workspace_id, "task.started", source_agent_id=task.agent_id, task_id=task.id, payload={"summary": "Codex iniciou a tarefa."})
-            provider = CodexAgentProvider(ROOT)
+            agent_session = session.scalar(select(AgentSession).where(AgentSession.agent_id == task.agent_id))
+            provider = CodexAgentProvider(Path(workspace.project_root))
             active_providers[task.id] = provider
             try:
-                events = await asyncio.wait_for(asyncio.to_thread(lambda: list(provider.run(task.prompt, task.access_mode))), timeout=TASK_TIMEOUT_SECONDS)
+                resume_id = agent_session.external_session_id if agent_session and agent_session.access_mode == task.access_mode else None
+                events = await asyncio.wait_for(asyncio.to_thread(lambda: list(provider.run(task.prompt, task.access_mode, resume_id))), timeout=TASK_TIMEOUT_SECONDS)
             except TimeoutError:
                 provider.cancel()
                 raise RuntimeError("Codex task timed out")
             task = session.get(Task, task_id)
             if task and task.state != "cancelled":
+                session_id = next((event.session_id for event in events if event.session_id), resume_id)
+                if session_id:
+                    agent_session = session.scalar(select(AgentSession).where(AgentSession.agent_id == task.agent_id))
+                    if agent_session:
+                        agent_session.external_session_id = session_id; agent_session.access_mode = task.access_mode; agent_session.last_resumed_at = now()
+                    else:
+                        session.add(AgentSession(agent_id=task.agent_id, provider="codex", external_session_id=session_id, access_mode=task.access_mode))
                 task.state = "succeeded"; task.result = "Concluída pelo Codex."; task.finished_at = now(); task.agent.visual_status = "completed"; session.commit()
                 for provider_event in events:
                     await emit(session, task.workspace_id, "task.progress", source_agent_id=task.agent_id, task_id=task.id, payload={"summary": provider_event.summary, "providerEvent": provider_event.type})

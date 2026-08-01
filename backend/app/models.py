@@ -48,6 +48,7 @@ class Agent(Base):
     skills: Mapped[list["AgentSkill"]] = relationship(back_populates="agent", cascade="all, delete-orphan")
     plugins: Mapped[list["AgentPlugin"]] = relationship(back_populates="agent", cascade="all, delete-orphan")
     tasks: Mapped[list["Task"]] = relationship(back_populates="agent", cascade="all, delete-orphan")
+    session: Mapped["AgentSession | None"] = relationship(back_populates="agent", cascade="all, delete-orphan", uselist=False)
 
 
 class Workstation(Base):
@@ -60,6 +61,17 @@ class Workstation(Base):
     orientation: Mapped[str] = mapped_column(String(8), default="south")
     interaction_points: Mapped[list] = mapped_column(JSON, default=list)
     agent: Mapped[Agent] = relationship(back_populates="workstation")
+
+
+class AgentSession(Base):
+    __tablename__ = "agent_sessions"
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=new_id)
+    agent_id: Mapped[str] = mapped_column(ForeignKey("agents.id"), unique=True, index=True)
+    provider: Mapped[str] = mapped_column(String(32), default="codex")
+    external_session_id: Mapped[str] = mapped_column(String(128))
+    access_mode: Mapped[str] = mapped_column(String(32), default="read_only")
+    last_resumed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    agent: Mapped[Agent] = relationship(back_populates="session")
 
 
 class Skill(Base):

@@ -8,7 +8,7 @@ Em um terminal:
 
 ```bash
 cd backend
-.venv/bin/alembic upgrade head
+PYTHONPATH=. .venv/bin/alembic upgrade head
 PYTHONPATH=. .venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
@@ -52,7 +52,7 @@ O último comando usa o Codex local em modo efêmero e somente leitura.
 - Grade isométrica, zoom, pan, seleção, foco e A* cardinal testado.
 - Cenário e spritesheets fornecidos usados pela cena.
 - FastAPI localhost, SQLite, Alembic, CRUD de agente/estação, associação de skill e WebSocket.
-- Adapter Codex isolado, permissões `read_only` e `workspace_write`, cancelamento e lock de escrita por projeto.
+- Adapter Codex isolado, sessão Codex persistida por agente, permissões `read_only` e `workspace_write`, cancelamento e lock de escrita por projeto.
 - Interação persistida entre agentes, com eventos sequenciais, A*, balão resumido e retorno visual à estação.
 - Catálogo/associação de plugins e aprovações explícitas antes de tarefas com escrita.
 

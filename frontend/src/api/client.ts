@@ -3,9 +3,9 @@ import type { Agent, Skill, VisualStatus } from "../types";
 const baseUrl = import.meta.env.VITE_BACKEND_URL ?? "http://127.0.0.1:8000";
 const colors = [0x5ca6d8, 0xd18b64, 0x85ba82, 0xa786d4, 0xe0ae59];
 
-type ApiAgent = { id: string; name: string; role: string; description: string; visualStatus: VisualStatus; position: { x: number; y: number }; basePosition: { x: number; y: number }; direction: Agent["direction"]; skills: { id: string; enabled: boolean }[]; plugins: Agent["pluginStates"] };
+type ApiAgent = { id: string; name: string; role: string; description: string; visualStatus: VisualStatus; sessionId?: string | null; position: { x: number; y: number }; basePosition: { x: number; y: number }; direction: Agent["direction"]; skills: { id: string; enabled: boolean }[]; plugins: Agent["pluginStates"] };
 export type Workspace = { id: string; name: string; room: { width: number; height: number }; projectRoot: string; gitBranch: string | null };
-export type Plugin = { id: string; name: string; description: string; manifest: { permissions?: string[] } };
+export type Plugin = { id: string; name: string; description: string; manifest: { version?: string; skills?: string[]; integrations?: string[]; permissions?: string[] } };
 export type Approval = { id: string; taskId: string; kind: string; summary: string };
 export type Task = { id: string; prompt: string; state: string; accessMode: string; parentTaskId?: string; delegationDepth: number; result?: string; createdAt: string; finishedAt?: string };
 

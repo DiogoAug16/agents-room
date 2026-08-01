@@ -21,6 +21,7 @@ export class OfficeScene extends Phaser.Scene {
   private gridGraphics?: Phaser.GameObjects.Graphics;
   private stationPreview?: Phaser.GameObjects.Graphics;
   private stationDrag?: string;
+  private stationOrigin?: Agent["position"];
   private readonly furnitureCells = new Set(["10,7", "11,7", "12,7", "13,7", "10,8", "11,8", "12,8", "13,8"]);
 
   constructor() { super("office"); }
@@ -51,7 +52,7 @@ export class OfficeScene extends Phaser.Scene {
       this.lastPointer.set(pointer.x, pointer.y);
     });
     this.input.on("pointerup", (pointer: Phaser.Input.Pointer) => {
-      if (this.stationDrag) { this.moveToCell(this.stationDrag, pointer); this.stationDrag = undefined; this.stationPreview?.clear(); }
+      if (this.stationDrag) { this.moveToCell(this.stationDrag, pointer); this.stationDrag = undefined; this.stationOrigin = undefined; this.stationPreview?.clear(); }
       this.draggingCamera = false;
     });
     sceneEvents.addEventListener("agents", this.sync as EventListener);
@@ -78,7 +79,7 @@ export class OfficeScene extends Phaser.Scene {
     const { agents, editMode } = (event as CustomEvent<{ agents: Agent[]; editMode: boolean }>).detail;
     this.editMode = editMode;
     this.gridGraphics?.setVisible(editMode);
-    if (!editMode) { this.stationDrag = undefined; this.stationPreview?.clear(); }
+    if (!editMode) { this.stationDrag = undefined; this.stationOrigin = undefined; this.stationPreview?.clear(); }
     const currentIds = new Set(agents.map((agent) => agent.id));
     this.agents.forEach(({ body, station }, id) => { if (!currentIds.has(id)) { body.destroy(); station.destroy(); this.agents.delete(id); } });
     agents.forEach((agent) => this.drawAgent(agent));
@@ -93,11 +94,11 @@ export class OfficeScene extends Phaser.Scene {
       const label = this.add.text(0, -108, agent.name, { fontFamily: "Inter, sans-serif", fontSize: "16px", color: "#f6f8fb", stroke: "#13202c", strokeThickness: 4 }).setOrigin(0.5);
       const status = this.add.circle(31, -84, 5, this.statusColor(agent.status));
       const container = this.add.container(screen.x, screen.y, [shadow, sprite, label, status]).setSize(76, 108).setInteractive({ useHandCursor: true });
-      const station = this.createStationMarker(screen);
+      const station = this.createStationMarker(agent);
       container.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
         pointer.event.stopPropagation();
         window.dispatchEvent(new CustomEvent("agent:select", { detail: agent.id }));
-        if (this.editMode) { this.stationDrag = agent.id; this.previewStation(agent.id, pointer); }
+        if (this.editMode) { this.stationDrag = agent.id; this.stationOrigin = { ...agent.position }; this.previewStation(agent.id, pointer); }
       });
       container.on("pointerover", () => container.setScale(1.08));
       container.on("pointerout", () => container.setScale(1));
@@ -115,15 +116,23 @@ export class OfficeScene extends Phaser.Scene {
   private moveToCell(id: string, pointer: Phaser.Input.Pointer) {
     const point = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
     const cell = screenToGrid(point.x, point.y);
-    if (!this.isStationCellValid(id, cell)) { window.dispatchEvent(new CustomEvent("station:invalid", { detail: cell })); return; }
+    if (!this.isStationCellValid(id, cell)) {
+      const origin = this.stationOrigin;
+      if (origin) this.agents.get(id)?.station.setPosition(gridToScreen(origin).x, gridToScreen(origin).y).setAlpha(1);
+      window.dispatchEvent(new CustomEvent("station:invalid", { detail: cell })); return;
+    }
+    this.agents.get(id)?.station.setAlpha(1);
     window.dispatchEvent(new CustomEvent("agent:move", { detail: { id, ...cell } }));
   }
 
-  private createStationMarker(screen: Agent["position"]) {
-    const point = gridToScreen(screen);
+  private createStationMarker(agent: Agent) {
+    const point = gridToScreen(agent.position);
     const desk = this.add.sprite(-14, 4, "station-desk").setOrigin(0.5, 0.82).setScale(0.35);
     const chair = this.add.sprite(18, 10, "station-chair").setOrigin(0.5, 0.82).setScale(0.35);
-    return this.add.container(point.x, point.y, [desk, chair]).setVisible(false);
+    const monitor = this.add.graphics().fillStyle(0x1c2a31, 1).fillRoundedRect(-15, -22, 15, 11, 2).fillStyle(0x8ed8e5, 1).fillRect(-13, -20, 11, 7).fillStyle(0x11191e, 1).fillRect(-9, -11, 3, 5).fillRect(-12, -7, 9, 2);
+    const label = this.add.text(0, -47, `ESTAÇÃO ${agent.name.toUpperCase()}`, { fontFamily: "Inter, sans-serif", fontSize: "10px", color: "#d8f5ef", stroke: "#13202c", strokeThickness: 3 }).setOrigin(0.5);
+    const interactionPoints = [[0, -TILE_HEIGHT / 2], [TILE_WIDTH / 2, 0], [-TILE_WIDTH / 2, 0]].map(([x, y]) => this.add.circle(x, y, 4, 0x4cae9b, 0.78));
+    return this.add.container(point.x, point.y, [desk, chair, monitor, label, ...interactionPoints]).setVisible(false);
   }
 
   private previewStation(agentId: string, pointer: Phaser.Input.Pointer) {
@@ -132,6 +141,7 @@ export class OfficeScene extends Phaser.Scene {
     const screen = gridToScreen(cell);
     if (!this.stationPreview) this.stationPreview = this.add.graphics().setDepth(9999);
     const valid = this.isStationCellValid(agentId, cell);
+    this.agents.get(agentId)?.station.setPosition(screen.x, screen.y).setAlpha(valid ? 0.72 : 0.42);
     this.stationPreview.clear().fillStyle(valid ? 0x4cae9b : 0xd35c5c, 0.38).lineStyle(2, valid ? 0x9de2d2 : 0xffaaa4, 0.9).fillPoints([
       new Phaser.Geom.Point(screen.x, screen.y - TILE_HEIGHT / 2), new Phaser.Geom.Point(screen.x + TILE_WIDTH / 2, screen.y), new Phaser.Geom.Point(screen.x, screen.y + TILE_HEIGHT / 2), new Phaser.Geom.Point(screen.x - TILE_WIDTH / 2, screen.y),
     ], true).strokePoints([
