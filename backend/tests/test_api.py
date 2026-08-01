@@ -13,7 +13,7 @@ os.environ["AGENTS_ROOM_DATABASE_URL"] = f"sqlite:///{TEST_DB}"
 from fastapi.testclient import TestClient  # noqa: E402
 from app.database import SessionLocal  # noqa: E402
 from app.main import app, execute_task  # noqa: E402
-from app.models import AgentSession, Task  # noqa: E402
+from app.models import AgentSession, Task, Workspace  # noqa: E402
 from app.codex_provider import ProviderEvent  # noqa: E402
 
 
@@ -76,6 +76,18 @@ class ApiTests(unittest.TestCase):
         agent = self.client.get(f"/workspaces/{workspace_id}/agents").json()[0]
         layout = {"schema_version": 4, "furniture_instances": [{"id": "sofa-1", "assetId": "sofa.blue.01", "position": {"x": 10, "y": 20}, "orientation": "north_east", "createdAt": "now"}], "furniture_groups": [], "agent_seat_assignments": {agent["id"]: "sofa-1"}}
         self.assertEqual(self.client.put(f"/workspaces/{workspace_id}/office-layout", json=layout).status_code, 422)
+
+    def test_migrates_a_legacy_layout_when_loading(self) -> None:
+        workspace_id = self.workspace["id"]
+        legacy = {"schemaVersion": 3, "furnitureInstances": [{"id": "chair-1", "assetId": "chair.office.black.01", "position": {"x": 10, "y": 20}, "orientation": "north_east", "createdAt": "now"}], "furnitureGroups": [{"id": "station-1", "name": "Estação", "instanceIds": ["chair-1"], "groupType": "workstation"}], "agentSeatAssignments": {}}
+        session = SessionLocal()
+        workspace = session.get(Workspace, workspace_id)
+        workspace.settings = {**workspace.settings, "office_layout": legacy}
+        session.commit(); session.close()
+        response = self.client.get(f"/workspaces/{workspace_id}/office-layout")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["schemaVersion"], 4)
+        self.assertEqual(response.json()["furnitureInstances"][0]["groupId"], "station-1")
 
     def test_rejects_two_agents_in_the_same_cell(self) -> None:
         workspace_id = self.workspace["id"]

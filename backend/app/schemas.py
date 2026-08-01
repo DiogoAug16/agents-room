@@ -53,7 +53,7 @@ class FurnitureGroupPayload(BaseModel):
 
 
 class OfficeLayoutUpdate(BaseModel):
-    schema_version: int = Field(default=4, ge=1, le=100)
+    schema_version: Literal[4] = 4
     furniture_instances: list[FurnitureInstancePayload] = Field(default_factory=list, max_length=200)
     furniture_groups: list[FurnitureGroupPayload] = Field(default_factory=list, max_length=100)
     agent_seat_assignments: dict[str, str] = Field(default_factory=dict)

@@ -15,6 +15,7 @@ from .events import emit, manager, replay
 from .models import Agent, AgentInteraction, AgentPlugin, AgentSession, AgentSkill, Approval, Plugin, Skill, Task, Workspace, Workstation, now
 from .schemas import AgentCreate, ApprovalDecision, DelegationCreate, InteractionCreate, OfficeLayoutUpdate, PluginAssignment, PluginEnabledUpdate, PositionUpdate, SkillAssignment, SkillEnabledUpdate, TaskCreate
 from .layout_validation import validate_layout
+from .layout_migrations import empty_office_layout, migrate_office_layout
 from .workspace_metadata import current_git_branch
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -169,7 +170,11 @@ def get_office_layout(workspace_id: str, session: Session = Depends(get_session)
     workspace = session.get(Workspace, workspace_id)
     if not workspace:
         raise HTTPException(404, "Workspace not found")
-    return workspace.settings.get("office_layout", {"schemaVersion": 4, "furnitureInstances": [], "furnitureGroups": [], "agentSeatAssignments": {}})
+    layout, migrated = migrate_office_layout(workspace.settings.get("office_layout"))
+    if migrated:
+        workspace.settings = {**workspace.settings, "office_layout": layout}
+        session.commit()
+    return layout
 
 
 @app.put("/workspaces/{workspace_id}/office-layout")
