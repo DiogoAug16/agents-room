@@ -10,12 +10,14 @@ import { clearEdgeConnectedBackdrop } from "./alpha-mask";
 import { isValidStationCell } from "./station-layout";
 import { IdleBehaviorController, type IdleBehaviorType } from "./idle-behavior-controller";
 import { NavigationGrid } from "./maps/navigation-grid";
+import { preservesNavigationRoutes } from "./maps/connectivity";
 import { homeSeatForAgent, IDLE_POINTS, isInsideEmptyRoomFloor, MEETING_AREAS, STATIC_SEATS, staticObstacleKeys, WORKSTATION_CELLS, WORKSTATIONS, type SeatAnchor } from "./maps/office-layout";
 import { SeatRegistry, sameGridPoint, seatApproachWorldPosition, seatedWorldPosition } from "./maps/seats";
 import { FURNITURE_ASSETS, defaultFurnitureOrientation, furnitureAsset, furnitureCells, furnitureImage, furnitureInteractionPoints, furnitureOrientations, furnitureOrigin, furnitureSeat, furnitureSeats, furnitureTextureKey, type AgentSeatAssignments, type FurnitureInstance, type FurnitureOrientation } from "./furniture/catalog";
 
 type DrawnAgent = { body: Phaser.GameObjects.Container; station: Phaser.GameObjects.Container; sprite: Phaser.GameObjects.Sprite; status: Phaser.GameObjects.Arc; data: Agent; currentCell: Agent["position"]; seatId?: string; idleToken: number };
 type FurnitureLayers = { rear: Phaser.GameObjects.Sprite; front?: Phaser.GameObjects.Sprite };
+type PlacementState = "valid" | "collision" | "blocks_route";
 
 export class OfficeScene extends Phaser.Scene {
   private agents = new Map<string, DrawnAgent>();
@@ -246,10 +248,11 @@ export class OfficeScene extends Phaser.Scene {
     const orientation = this.placingFurnitureOrientation ?? defaultFurnitureOrientation(asset.id);
     const screen = gridToScreen(cell);
     if (!this.furnitureGhost) this.furnitureGhost = this.add.sprite(screen.x, screen.y, furnitureTextureKey(asset, orientation)).setOrigin(furnitureOrigin(asset, orientation).x, furnitureOrigin(asset, orientation).y).setScale(asset.defaultScale ?? 0.75).setDepth(99_997);
-    const valid = this.isNewFurniturePlacementValid(asset.id, cell);
-    this.furnitureGhost.setTexture(furnitureTextureKey(asset, orientation)).setOrigin(furnitureOrigin(asset, orientation).x, furnitureOrigin(asset, orientation).y).setPosition(screen.x, screen.y).setAlpha(valid ? 0.58 : 0.34).setTint(valid ? 0x9de2d2 : 0xffaaa4);
+    const state = this.newFurniturePlacementState(asset.id, cell);
+    const color = state === "valid" ? 0x9de2d2 : state === "blocks_route" ? 0xf0c52e : 0xffaaa4;
+    this.furnitureGhost.setTexture(furnitureTextureKey(asset, orientation)).setOrigin(furnitureOrigin(asset, orientation).x, furnitureOrigin(asset, orientation).y).setPosition(screen.x, screen.y).setAlpha(state === "valid" ? 0.58 : 0.38).setTint(color);
     if (!this.stationPreview) this.stationPreview = this.add.graphics().setDepth(99_996);
-    this.stationPreview.clear().fillStyle(valid ? 0x4cae9b : 0xd35c5c, 0.32);
+    this.stationPreview.clear().fillStyle(state === "valid" ? 0x4cae9b : state === "blocks_route" ? 0xd89a34 : 0xd35c5c, 0.32);
     asset.footprint.forEach((offset) => { const tile = gridToScreen({ x: cell.x + offset.x, y: cell.y + offset.y }); this.stationPreview!.fillPoints([new Phaser.Geom.Point(tile.x, tile.y - TILE_HEIGHT / 2), new Phaser.Geom.Point(tile.x + TILE_WIDTH / 2, tile.y), new Phaser.Geom.Point(tile.x, tile.y + TILE_HEIGHT / 2), new Phaser.Geom.Point(tile.x - TILE_WIDTH / 2, tile.y)], true); });
   }
   private nudgeFurniturePlacement(x: number, y: number, distance: number) {
@@ -259,17 +262,24 @@ export class OfficeScene extends Phaser.Scene {
     this.placementCell = { x: point.x + x * distance, y: point.y + y * distance };
     this.previewNewFurnitureAt(this.placementCell);
   }
-  private isNewFurniturePlacementValid(assetId: string, position: Agent["position"]) {
-    const asset = furnitureAsset(assetId); if (!asset) return false;
+  private newFurniturePlacementState(assetId: string, position: Agent["position"]): PlacementState {
+    const asset = furnitureAsset(assetId); if (!asset) return "collision";
     const occupied = furnitureCells(this.furnitureItems);
-    return asset.footprint.every((offset) => {
+    const isPhysicalPlacementValid = asset.footprint.every((offset) => {
       const cell = { x: position.x + offset.x, y: position.y + offset.y };
       return isInsideEmptyRoomFloor(cell) && !occupied.has(`${cell.x},${cell.y}`) && ![...this.agents.values()].some((agent) => sameGridPoint(agent.currentCell, cell));
     });
+    if (!isPhysicalPlacementValid) return "collision";
+    const temporaryFurniture = new Map(this.furnitureBlocks);
+    asset.footprint.forEach((offset) => temporaryFurniture.set(`${position.x + offset.x},${position.y + offset.y}`, `preview-${assetId}`));
+    const previewNavigation = new NavigationGrid(); previewNavigation.setFurniture(temporaryFurniture);
+    return preservesNavigationRoutes(previewNavigation, [...this.agents.values()].map((agent) => ({ agentId: agent.data.id, start: agent.currentCell, destination: this.homeSeat(agent.data).approachPosition }))) ? "valid" : "blocks_route";
   }
   private placeNewFurniture(pointer: Phaser.Input.Pointer) {
     const point = this.cameras.main.getWorldPoint(pointer.x, pointer.y); const cell = this.placementCell ?? screenToGrid(point.x, point.y);
-    if (!this.placingFurnitureAssetId || !this.isNewFurniturePlacementValid(this.placingFurnitureAssetId, cell)) { window.dispatchEvent(new Event("furniture:invalid")); return; }
+    const state = this.placingFurnitureAssetId && this.newFurniturePlacementState(this.placingFurnitureAssetId, cell);
+    if (state === "blocks_route") { window.dispatchEvent(new Event("furniture:route-blocked")); return; }
+    if (state !== "valid") { window.dispatchEvent(new Event("furniture:invalid")); return; }
     window.dispatchEvent(new CustomEvent("furniture:place", { detail: cell }));
   }
   private moveFurnitureToCell(id: string, pointer: Phaser.Input.Pointer) {
