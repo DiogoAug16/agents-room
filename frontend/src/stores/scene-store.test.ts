@@ -142,6 +142,14 @@ describe("furniture editor history", () => {
     expect(store.renameSelectedFurnitureGroup(" ")).toBe(false);
   });
 
+  it("renames a workstation without changing its assigned chair", () => {
+    const store = useSceneStore.getState();
+    expect(store.createWorkstationPreset("ana", { x: 10, y: 23 })).toBe(true);
+    const assignment = useSceneStore.getState().agentSeatAssignments.ana;
+    expect(store.renameSelectedFurnitureGroup("Estação de backend")).toBe(true);
+    expect(useSceneStore.getState()).toMatchObject({ furnitureGroups: [expect.objectContaining({ name: "Estação de backend", groupType: "workstation" })], agentSeatAssignments: { ana: assignment } });
+  });
+
   it("selects every member of the active furniture group", () => {
     const store = useSceneStore.getState();
     store.addFurniture("chair.office.black.01", { x: 10, y: 20 });

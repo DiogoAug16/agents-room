@@ -176,7 +176,7 @@ export const useSceneStore = create<SceneStore>((set) => ({
     set((state) => {
       const groupId = state.furniture.find((item) => item.id === state.selectedFurnitureId)?.groupId;
       const group = state.furnitureGroups.find((item) => item.id === groupId), trimmed = name.trim();
-      if (!group || group.groupType !== "custom" || !trimmed || trimmed.length > 128) return state;
+      if (!group || group.groupType === "lounge" || !trimmed || trimmed.length > 128) return state;
       renamed = true;
       return { furnitureGroups: state.furnitureGroups.map((item) => item.id === group.id ? { ...item, name: trimmed } : item), furniturePast: [...state.furniturePast, snapshot(state)], furnitureFuture: [] };
     });
