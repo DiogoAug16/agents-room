@@ -82,6 +82,9 @@ test("builds a grouped workstation for the selected agent", async ({ page }) => 
   await expect(deleteDialog.getByRole("heading", { name: "Remover móvel em uso?" })).toBeVisible();
   await expect(deleteDialog).toContainText("perderá a estação ou assento associado.");
   await deleteDialog.getByRole("button", { name: "Cancelar" }).click();
+  await page.getByRole("button", { name: "Duplicar" }).click();
+  await expect(page.getByRole("button", { name: /Mesa de trabalho.*2 na sala/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Cadeira executiva.*2 na sala/ })).toBeVisible();
   const ungroup = page.getByRole("button", { name: "Desagrupar" });
   await expect(ungroup).toBeEnabled();
   await ungroup.click();
@@ -90,7 +93,7 @@ test("builds a grouped workstation for the selected agent", async ({ page }) => 
   await expect(rotate).toBeEnabled();
   await rotate.click();
   await page.getByRole("button", { name: "Duplicar" }).click();
-  await expect(page.getByRole("button", { name: /Mesa de trabalho.*2 na sala/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Mesa de trabalho.*3 na sala/ })).toBeVisible();
   await page.getByRole("button", { name: /Planta de mesa/ }).click();
   await expect(page.getByRole("button", { name: /Planta de mesa.*1 na sala/ })).toBeVisible();
 });

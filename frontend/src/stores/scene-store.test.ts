@@ -99,6 +99,20 @@ describe("furniture editor history", () => {
     expect(copy.id).not.toBe(source.id);
   });
 
+  it("duplicates a complete furniture group with remapped surface attachments", () => {
+    const store = useSceneStore.getState();
+    expect(store.createWorkstationPreset("ana", { x: 10, y: 23 })).toBe(true);
+    const desk = useSceneStore.getState().furniture[0];
+    store.duplicateFurniture(desk.id, { x: 12, y: 25 });
+    const { furniture, furnitureGroups } = useSceneStore.getState();
+    expect(furniture).toHaveLength(6);
+    expect(furnitureGroups).toHaveLength(2);
+    const copy = furnitureGroups[1], copiedFurniture = furniture.filter((item) => item.groupId === copy.id), copiedDesk = copiedFurniture.find((item) => item.assetId === "desk.work.light.01")!;
+    expect(copy).toMatchObject({ groupType: "workstation", instanceIds: copiedFurniture.map((item) => item.id) });
+    expect(copiedFurniture.find((item) => item.assetId === "monitor.black.01")?.parentId).toBe(copiedDesk.id);
+    expect(copiedDesk.position).toEqual({ x: 12, y: 25 });
+  });
+
   it("groups multiple selected furniture instances into one persisted group", () => {
     const store = useSceneStore.getState();
     store.addFurniture("chair.office.black.01", { x: 10, y: 20 });

@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import type { Agent } from "../types";
-import { defaultFurnitureOrientation, furnitureAsset, furnitureCells, furnitureOrientations, linkedFurnitureIds, movedFurnitureInstances, removableFurnitureIds, type AgentSeatAssignments, type FurnitureGroup, type FurnitureInstance, type FurnitureOrientation } from "../scene/furniture/catalog";
+import { defaultFurnitureOrientation, duplicatedFurnitureInstances, furnitureAsset, furnitureCells, furnitureOrientations, linkedFurnitureIds, movedFurnitureInstances, removableFurnitureIds, type AgentSeatAssignments, type FurnitureGroup, type FurnitureInstance, type FurnitureOrientation } from "../scene/furniture/catalog";
 import { isInsideEmptyRoomFloor } from "../scene/maps/office-layout";
 
 type LayoutSnapshot = { furniture: FurnitureInstance[]; furnitureGroups: FurnitureGroup[]; agentSeatAssignments: AgentSeatAssignments };
@@ -120,9 +120,8 @@ export const useSceneStore = create<SceneStore>((set) => ({
     return added;
   },
   duplicateFurniture: (id, position) => set((state) => {
-    const source = state.furniture.find((item) => item.id === id); if (!source) return state;
-    const clone: FurnitureInstance = { ...source, id: crypto.randomUUID(), position, createdAt: new Date().toISOString(), groupId: undefined, parentId: undefined, surfaceOffset: undefined };
-    return { furniture: [...state.furniture, clone], selectedFurnitureId: clone.id, selectedFurnitureIds: [clone.id], furniturePast: [...state.furniturePast, snapshot(state)], furnitureFuture: [] };
+    const duplicate = duplicatedFurnitureInstances(state.furniture, state.furnitureGroups, id, position); if (!duplicate) return state;
+    return { furniture: [...state.furniture, ...duplicate.furniture], furnitureGroups: duplicate.group ? [...state.furnitureGroups, duplicate.group] : state.furnitureGroups, selectedFurnitureId: duplicate.selectedFurnitureId, selectedFurnitureIds: duplicate.furniture.map((item) => item.id), furniturePast: [...state.furniturePast, snapshot(state)], furnitureFuture: [] };
   }),
   moveFurniture: (id, position) => set((state) => {
     const ids = state.selectedFurnitureIds.includes(id) ? new Set(state.selectedFurnitureIds.flatMap((selectedId) => [...linkedFurnitureIds(state.furniture, selectedId)])) : undefined;

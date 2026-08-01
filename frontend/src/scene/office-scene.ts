@@ -13,7 +13,7 @@ import { NavigationGrid } from "./maps/navigation-grid";
 import { preservesNavigationRoutes } from "./maps/connectivity";
 import { homeSeatForAgent, IDLE_POINTS, isInsideEmptyRoomFloor, MEETING_AREAS, STATIC_SEATS, staticObstacleKeys, WORKSTATION_CELLS, WORKSTATIONS, type SeatAnchor } from "./maps/office-layout";
 import { SeatRegistry, sameGridPoint, seatApproachWorldPosition, seatedWorldPosition } from "./maps/seats";
-import { FURNITURE_ASSETS, defaultFurnitureOrientation, furnitureAsset, furnitureCells, furnitureImage, furnitureInteractionPoints, furnitureOrientations, furnitureOrigin, furnitureSeat, furnitureSeats, furnitureTextureKey, linkedFurnitureIds, movedFurnitureInstances, removableFurnitureIds, type AgentSeatAssignments, type FurnitureInstance, type FurnitureOrientation } from "./furniture/catalog";
+import { FURNITURE_ASSETS, defaultFurnitureOrientation, duplicatedFurnitureInstances, furnitureAsset, furnitureCells, furnitureImage, furnitureInteractionPoints, furnitureOrientations, furnitureOrigin, furnitureSeat, furnitureSeats, furnitureTextureKey, linkedFurnitureIds, movedFurnitureInstances, removableFurnitureIds, type AgentSeatAssignments, type FurnitureInstance, type FurnitureOrientation } from "./furniture/catalog";
 
 type DrawnAgent = { body: Phaser.GameObjects.Container; station: Phaser.GameObjects.Container; sprite: Phaser.GameObjects.Sprite; status: Phaser.GameObjects.Arc; data: Agent; currentCell: Agent["position"]; seatId?: string; idleToken: number };
 type FurnitureLayers = { rear: Phaser.GameObjects.Sprite; front?: Phaser.GameObjects.Sprite };
@@ -335,8 +335,10 @@ export class OfficeScene extends Phaser.Scene {
   private duplicateFurnitureRequest = (event: Event) => {
     const id = (event as CustomEvent<string>).detail; const item = this.furnitureItems.find((value) => value.id === id); if (!item) return;
     const position = { x: item.position.x + 2, y: item.position.y + 2 };
-    const state = this.newFurniturePlacementState(item.assetId, position);
-    if (state !== "valid") { window.dispatchEvent(new Event(state === "blocks_route" ? "furniture:route-blocked" : "furniture:invalid")); return; }
+    const duplicate = duplicatedFurnitureInstances(this.furnitureItems, useSceneStore.getState().furnitureGroups, id, position); if (!duplicate) return;
+    const cells = furnitureCells(duplicate.furniture);
+    if ([...cells.keys()].some((cell) => this.furnitureBlocks.has(cell)) || duplicate.furniture.some((value) => furnitureAsset(value.assetId)!.footprint.some((offset) => !isInsideEmptyRoomFloor({ x: value.position.x + offset.x, y: value.position.y + offset.y }))) || [...cells.keys()].some((cell) => [...this.agents.values()].some((agent) => cell === `${agent.currentCell.x},${agent.currentCell.y}`))) { window.dispatchEvent(new Event("furniture:invalid")); return; }
+    if (!this.preservesFurnitureRoutes([...this.furnitureItems, ...duplicate.furniture])) { window.dispatchEvent(new Event("furniture:route-blocked")); return; }
     window.dispatchEvent(new CustomEvent("furniture:duplicate", { detail: { id, position } }));
   };
 
