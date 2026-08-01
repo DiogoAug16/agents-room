@@ -28,6 +28,7 @@ export class OfficeScene extends Phaser.Scene {
   private routeReservations = new Map<string, string>();
   private gridGraphics?: Phaser.GameObjects.Graphics;
   private stationPreview?: Phaser.GameObjects.Graphics;
+  private selectionGraphics?: Phaser.GameObjects.Graphics;
   private stationDrag?: string;
   private furnitureDrag?: string;
   private placingFurnitureAssetId?: string;
@@ -228,6 +229,19 @@ export class OfficeScene extends Phaser.Scene {
       else if (highlighted) layers.rear.setTint(0x9ed9cf);
       layers.front?.clearTint().setPosition(screen.x, screen.y).setDepth(screen.y + 10).setAlpha(this.editMode ? 1 : 0.96); if (selected) layers.front?.setTint(0xc6f2e7); else if (highlighted) layers.front?.setTint(0x9ed9cf);
     });
+    this.renderSelectedFurnitureFootprints();
+  }
+
+  private renderSelectedFurnitureFootprints() {
+    if (!this.selectionGraphics) this.selectionGraphics = this.add.graphics().setDepth(99_995);
+    const graphics = this.selectionGraphics.clear().setVisible(this.editMode && this.highlightedFurnitureIds.size > 0);
+    if (!this.editMode || !this.highlightedFurnitureIds.size) return;
+    graphics.fillStyle(0x4cae9b, 0.14).lineStyle(2, 0x75c8b7, 0.92);
+    this.furnitureItems.filter((item) => this.highlightedFurnitureIds.has(item.id)).forEach((item) => furnitureAsset(item.assetId)?.footprint.forEach((offset) => {
+      const point = gridToScreen({ x: item.position.x + offset.x, y: item.position.y + offset.y });
+      const diamond = [new Phaser.Geom.Point(point.x, point.y - TILE_HEIGHT / 2), new Phaser.Geom.Point(point.x + TILE_WIDTH / 2, point.y), new Phaser.Geom.Point(point.x, point.y + TILE_HEIGHT / 2), new Phaser.Geom.Point(point.x - TILE_WIDTH / 2, point.y), new Phaser.Geom.Point(point.x, point.y - TILE_HEIGHT / 2)];
+      graphics.fillPoints(diamond, true).strokePoints(diamond);
+    }));
   }
 
   private applyFurnitureLayerCrops(layers: FurnitureLayers, asset: ReturnType<typeof furnitureAsset>, texture: string) {
