@@ -102,8 +102,23 @@ test("builds a lounge preset with a modular sofa", async ({ page }) => {
   await expect(page.getByRole("button", { name: /Sofá azul.*1 na sala/ })).toBeVisible();
   await expect(page.getByText("Lounge com dois assentos criado.")).toBeVisible();
   await page.getByRole("button", { name: "Restaurar padrão" }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.getByRole("heading", { name: "Restaurar layout padrão?" })).toBeVisible();
+  await expect(dialog).toContainText("Isso substituirá");
+  await dialog.getByRole("button", { name: "Cancelar" }).click();
+  await expect(page.getByRole("button", { name: /Sofá azul.*1 na sala/ })).toBeVisible();
+  await page.getByRole("button", { name: "Restaurar padrão" }).click();
+  await dialog.getByRole("button", { name: "Restaurar padrão" }).click();
   await expect(page.getByText("Layout padrão restaurado para os agentes atuais.")).toBeVisible();
   await expect(page.getByRole("button", { name: /Cadeira executiva.*3 na sala/ })).toBeVisible();
+  await page.getByRole("button", { name: "Limpar" }).click();
+  await expect(dialog.getByRole("heading", { name: "Limpar escritório?" })).toBeVisible();
+  await expect(dialog).toContainText("Isso removerá");
+  await dialog.getByRole("button", { name: "Cancelar" }).click();
+  await expect(page.getByRole("button", { name: /Cadeira executiva.*3 na sala/ })).toBeVisible();
+  await page.getByRole("button", { name: "Limpar" }).click();
+  await dialog.getByRole("button", { name: "Limpar sala" }).click();
+  await expect(page.getByRole("button", { name: /Cadeira executiva.*0 na sala/ })).toBeVisible();
 });
 
 test("opens the development asset calibration editor", async ({ page }) => {
