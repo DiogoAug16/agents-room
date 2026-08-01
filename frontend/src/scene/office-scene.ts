@@ -3,7 +3,7 @@ import type { Agent } from "../types";
 import { GRID_HEIGHT, GRID_WIDTH, TILE_HEIGHT, TILE_WIDTH, gridToScreen, isInsideGrid, screenToGrid } from "./grid";
 import { sceneEvents } from "./scene-events";
 import { useSceneStore } from "../stores/scene-store";
-import { cellKey, findPath } from "./pathfinding";
+import { cellKey, findPath, releaseAgentReservations, releaseReservation, reserveRoute, reservedByOthers } from "./pathfinding";
 import type { SceneInteraction } from "./scene-events";
 import { isCheckerboardPixel } from "./character-sheet";
 
@@ -15,6 +15,7 @@ export class OfficeScene extends Phaser.Scene {
   private draggingCamera = false;
   private lastPointer = new Phaser.Math.Vector2();
   private activeInteractions = new Set<string>();
+  private routeReservations = new Map<string, string>();
   private readonly furnitureCells = new Set(["10,7", "11,7", "12,7", "13,7", "10,8", "11,8", "12,8", "13,8"]);
 
   constructor() { super("office"); }
@@ -105,26 +106,28 @@ export class OfficeScene extends Phaser.Scene {
     const source = this.agents.get(interaction.sourceAgentId);
     const target = this.agents.get(interaction.targetAgentId);
     if (!source || !target || this.activeInteractions.has(source.data.id) || this.activeInteractions.has(target.data.id)) return;
-    const blocked = new Set(this.furnitureCells);
-    this.agents.forEach(({ data }, id) => { if (id !== source.data.id) blocked.add(cellKey(data.position)); });
+    const blocked = this.blockedCellsFor(source.data.id);
     const destination = [{ x: target.data.position.x, y: target.data.position.y + 1 }, { x: target.data.position.x + 1, y: target.data.position.y }, { x: target.data.position.x - 1, y: target.data.position.y }, { x: target.data.position.x, y: target.data.position.y - 1 }].find((cell) => isInsideGrid(cell) && !blocked.has(cellKey(cell)));
     if (!destination) { window.dispatchEvent(new CustomEvent("interaction:failed", { detail: interaction })); return; }
-    const route = findPath(source.data.position, destination, blocked);
+    const route = this.planRoute(source.data.id, source.data.position, destination);
     if (!route) { window.dispatchEvent(new CustomEvent("interaction:failed", { detail: interaction })); return; }
     this.activeInteractions.add(interaction.interactionId); this.activeInteractions.add(source.data.id); this.activeInteractions.add(target.data.id);
     window.dispatchEvent(new CustomEvent("interaction:started", { detail: interaction }));
-    await this.walk(source, route);
-    target.sprite.stop().setFrame(8);
-    const bubble = this.add.text(target.body.x, target.body.y - 138, interaction.summary, { fontFamily: "Inter, sans-serif", fontSize: "14px", color: "#18252c", backgroundColor: "#f5fbfd", wordWrap: { width: 260 }, padding: { x: 10, y: 7 } }).setOrigin(0.5).setDepth(99999);
-    await this.wait(1600);
-    bubble.destroy();
-    const returnBlocked = new Set(this.furnitureCells);
-    this.agents.forEach(({ data }, id) => { if (id !== source.data.id) returnBlocked.add(cellKey(data.position)); });
-    const returnRoute = findPath(destination, source.data.basePosition, returnBlocked);
-    if (returnRoute) await this.walk(source, returnRoute);
-    this.playVisualState(source.sprite, { ...source.data, status: "working" });
-    this.activeInteractions.delete(interaction.interactionId); this.activeInteractions.delete(source.data.id); this.activeInteractions.delete(target.data.id);
-    window.dispatchEvent(new CustomEvent("interaction:completed", { detail: interaction }));
+    try {
+      await this.walk(source, route);
+      target.sprite.stop().setFrame(8);
+      const bubble = this.add.text(target.body.x, target.body.y - 138, interaction.summary, { fontFamily: "Inter, sans-serif", fontSize: "14px", color: "#18252c", backgroundColor: "#f5fbfd", wordWrap: { width: 260 }, padding: { x: 10, y: 7 } }).setOrigin(0.5).setDepth(99999);
+      await this.wait(1600);
+      bubble.destroy();
+      const returnRoute = this.planRoute(source.data.id, destination, source.data.basePosition);
+      if (!returnRoute) { window.dispatchEvent(new CustomEvent("interaction:failed", { detail: interaction })); return; }
+      await this.walk(source, returnRoute);
+      this.playVisualState(source.sprite, { ...source.data, status: "working" });
+      window.dispatchEvent(new CustomEvent("interaction:completed", { detail: interaction }));
+    } finally {
+      releaseAgentReservations(this.routeReservations, source.data.id);
+      this.activeInteractions.delete(interaction.interactionId); this.activeInteractions.delete(source.data.id); this.activeInteractions.delete(target.data.id);
+    }
   }
 
   private async walk(agent: DrawnAgent, route: Agent["position"][]) {
@@ -133,8 +136,26 @@ export class OfficeScene extends Phaser.Scene {
       agent.sprite.play(`${this.textureFor(agent.data)}-walk-${next.x > previous.x ? "east" : next.x < previous.x ? "west" : next.y > previous.y ? "south" : "north"}`, true);
       const screen = gridToScreen(next);
       await new Promise<void>((resolve) => this.tweens.add({ targets: agent.body, x: screen.x, y: screen.y, duration: 180, ease: "Sine.out", onComplete: () => resolve() }));
+      releaseReservation(this.routeReservations, agent.data.id, previous);
     }
     agent.sprite.stop();
+  }
+
+  private blockedCellsFor(agentId: string) {
+    const blocked = new Set(this.furnitureCells);
+    this.agents.forEach(({ data }, id) => { if (id !== agentId) blocked.add(cellKey(data.position)); });
+    reservedByOthers(this.routeReservations, agentId).forEach((cell) => blocked.add(cell));
+    return blocked;
+  }
+
+  private planRoute(agentId: string, start: Agent["position"], goal: Agent["position"]) {
+    // ponytail: two attempts cover synchronous contention; queue routes if traffic grows.
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const route = findPath(start, goal, this.blockedCellsFor(agentId));
+      if (!route) return null;
+      if (reserveRoute(this.routeReservations, agentId, route)) return route;
+    }
+    return null;
   }
 
   private wait(milliseconds: number) { return new Promise<void>((resolve) => this.time.delayedCall(milliseconds, resolve)); }

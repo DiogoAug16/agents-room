@@ -26,4 +26,23 @@ export function findPath(start: GridPoint, goal: GridPoint, blocked: ReadonlySet
   return null;
 }
 
+export function reserveRoute(reservations: Map<string, string>, agentId: string, route: GridPoint[]) {
+  const cells = route.slice(1).map(key);
+  if (cells.some((cell) => reservations.has(cell) && reservations.get(cell) !== agentId)) return false;
+  cells.forEach((cell) => reservations.set(cell, agentId));
+  return true;
+}
+
+export function releaseReservation(reservations: Map<string, string>, agentId: string, cell: GridPoint) {
+  if (reservations.get(key(cell)) === agentId) reservations.delete(key(cell));
+}
+
+export function releaseAgentReservations(reservations: Map<string, string>, agentId: string) {
+  reservations.forEach((owner, cell) => { if (owner === agentId) reservations.delete(cell); });
+}
+
+export function reservedByOthers(reservations: ReadonlyMap<string, string>, agentId: string) {
+  return new Set([...reservations].filter(([, owner]) => owner !== agentId).map(([cell]) => cell));
+}
+
 export const cellKey = key;
