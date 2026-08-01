@@ -142,6 +142,20 @@ describe("furniture editor history", () => {
     expect(store.renameSelectedFurnitureGroup(" ")).toBe(false);
   });
 
+  it("selects every member of the active furniture group", () => {
+    const store = useSceneStore.getState();
+    store.addFurniture("chair.office.black.01", { x: 10, y: 20 });
+    store.addFurniture("water.dispenser.01", { x: 14, y: 20 });
+    const [chair, dispenser] = useSceneStore.getState().furniture;
+    store.selectFurniture(chair.id);
+    store.selectFurniture(dispenser.id, true);
+    store.groupSelectedFurniture();
+    store.selectFurniture(chair.id);
+    store.selectSelectedFurnitureGroup();
+    expect(useSceneStore.getState().selectedFurnitureIds).toEqual([chair.id, dispenser.id]);
+    expect(useSceneStore.getState().selectedFurnitureId).toBe(chair.id);
+  });
+
   it("ungroups selected furniture and moves the preserved multi-selection together", () => {
     const store = useSceneStore.getState();
     store.addFurniture("chair.office.black.01", { x: 10, y: 20 });

@@ -50,6 +50,7 @@ type SceneStore = {
   removeFurniture: (id: string) => void;
   rotateFurniture: (id: string) => void;
   selectFurniture: (id?: string, additive?: boolean) => void;
+  selectSelectedFurnitureGroup: () => void;
   groupSelectedFurniture: () => void;
   ungroupSelectedFurniture: () => void;
   renameSelectedFurnitureGroup: (name: string) => boolean;
@@ -149,6 +150,12 @@ export const useSceneStore = create<SceneStore>((set) => ({
     if (selectedFurnitureIds.has(id)) selectedFurnitureIds.delete(id); else selectedFurnitureIds.add(id);
     const ids = [...selectedFurnitureIds];
     return { selectedFurnitureId: ids.includes(state.selectedFurnitureId ?? "") ? state.selectedFurnitureId : ids.at(-1), selectedFurnitureIds: ids };
+  }),
+  selectSelectedFurnitureGroup: () => set((state) => {
+    const group = state.furnitureGroups.find((item) => item.id === state.furniture.find((item) => item.id === state.selectedFurnitureId)?.groupId);
+    if (!group) return state;
+    const ids = group.instanceIds.filter((id) => state.furniture.some((item) => item.id === id));
+    return ids.length ? { selectedFurnitureId: state.selectedFurnitureId ?? ids[0], selectedFurnitureIds: ids } : state;
   }),
   groupSelectedFurniture: () => set((state) => {
     const ids = new Set(state.selectedFurnitureIds.flatMap((id) => [...linkedFurnitureIds(state.furniture, id)]));
