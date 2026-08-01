@@ -6,8 +6,10 @@ import { useSceneStore } from "../stores/scene-store";
 import { cellKey, findPath, releaseAgentReservations, releaseReservation, reserveRoute, reservedByOthers } from "./pathfinding";
 import type { SceneInteraction } from "./scene-events";
 import { isCheckerboardPixel } from "./character-sheet";
+import { clearEdgeConnectedBackdrop } from "./alpha-mask";
+import { isValidStationCell } from "./station-layout";
 
-type DrawnAgent = { body: Phaser.GameObjects.Container; sprite: Phaser.GameObjects.Sprite; status: Phaser.GameObjects.Arc; data: Agent };
+type DrawnAgent = { body: Phaser.GameObjects.Container; station: Phaser.GameObjects.Container; sprite: Phaser.GameObjects.Sprite; status: Phaser.GameObjects.Arc; data: Agent };
 
 export class OfficeScene extends Phaser.Scene {
   private agents = new Map<string, DrawnAgent>();
@@ -16,6 +18,9 @@ export class OfficeScene extends Phaser.Scene {
   private lastPointer = new Phaser.Math.Vector2();
   private activeInteractions = new Set<string>();
   private routeReservations = new Map<string, string>();
+  private gridGraphics?: Phaser.GameObjects.Graphics;
+  private stationPreview?: Phaser.GameObjects.Graphics;
+  private stationDrag?: string;
   private readonly furnitureCells = new Set(["10,7", "11,7", "12,7", "13,7", "10,8", "11,8", "12,8", "13,8"]);
 
   constructor() { super("office"); }
@@ -23,6 +28,7 @@ export class OfficeScene extends Phaser.Scene {
   preload() {
     const assetPath = window.location.protocol === "file:" ? "./" : "/";
     this.load.image("office", `${assetPath}cenario_completo.png`);
+    this.load.image("office-modular", `${assetPath}assets_cenario_2_modular.png`);
     [1, 2, 3].forEach((index) => this.load.spritesheet(`agent-${index}`, `${assetPath}personagem_${index}_asset.png`, { frameWidth: 256, frameHeight: 256 }));
   }
 
@@ -30,6 +36,7 @@ export class OfficeScene extends Phaser.Scene {
     const background = this.add.image(0, 0, "office").setOrigin(0).setScale(0.75).setDepth(-100);
     background.setInteractive();
     this.cleanCharacterSheets();
+    this.createStationTextures();
     this.createCharacterAnimations();
     this.drawGrid();
     this.cameras.main.setBounds(-80, -80, background.displayWidth + 160, background.displayHeight + 160);
@@ -37,12 +44,16 @@ export class OfficeScene extends Phaser.Scene {
     this.input.on("wheel", (_: Phaser.Input.Pointer, _objects: unknown, _dx: number, dy: number) => this.cameras.main.setZoom(Phaser.Math.Clamp(this.cameras.main.zoom - dy * 0.001, 0.55, 1.15)));
     background.on("pointerdown", (pointer: Phaser.Input.Pointer) => { this.draggingCamera = true; this.lastPointer.set(pointer.x, pointer.y); });
     this.input.on("pointermove", (pointer: Phaser.Input.Pointer) => {
+      if (this.stationDrag) { this.previewStation(this.stationDrag, pointer); return; }
       if (!this.draggingCamera) return;
       this.cameras.main.scrollX -= (pointer.x - this.lastPointer.x) / this.cameras.main.zoom;
       this.cameras.main.scrollY -= (pointer.y - this.lastPointer.y) / this.cameras.main.zoom;
       this.lastPointer.set(pointer.x, pointer.y);
     });
-    this.input.on("pointerup", () => { this.draggingCamera = false; });
+    this.input.on("pointerup", (pointer: Phaser.Input.Pointer) => {
+      if (this.stationDrag) { this.moveToCell(this.stationDrag, pointer); this.stationDrag = undefined; this.stationPreview?.clear(); }
+      this.draggingCamera = false;
+    });
     sceneEvents.addEventListener("agents", this.sync as EventListener);
     sceneEvents.addEventListener("interaction", this.interact as EventListener);
     this.sync(new CustomEvent("agents", { detail: { agents: useSceneStore.getState().agents, editMode: useSceneStore.getState().editMode } }));
@@ -53,20 +64,23 @@ export class OfficeScene extends Phaser.Scene {
   shutdown() { sceneEvents.removeEventListener("agents", this.sync as EventListener); sceneEvents.removeEventListener("interaction", this.interact as EventListener); }
 
   private drawGrid() {
-    const graphics = this.add.graphics().setDepth(-50).setAlpha(0.18);
+    const graphics = this.add.graphics().setDepth(-50).setAlpha(0.48).setVisible(false);
     for (let x = 0; x < GRID_WIDTH; x++) for (let y = 0; y < GRID_HEIGHT; y++) {
       const point = gridToScreen({ x, y });
-      graphics.lineStyle(1, 0xffffff).strokePoints([
+      graphics.lineStyle(2, 0x9ad9e6, 0.72).strokePoints([
         new Phaser.Geom.Point(point.x, point.y - TILE_HEIGHT / 2), new Phaser.Geom.Point(point.x + TILE_WIDTH / 2, point.y), new Phaser.Geom.Point(point.x, point.y + TILE_HEIGHT / 2), new Phaser.Geom.Point(point.x - TILE_WIDTH / 2, point.y), new Phaser.Geom.Point(point.x, point.y - TILE_HEIGHT / 2),
       ]);
     }
+    this.gridGraphics = graphics;
   }
 
   private sync = (event: Event) => {
     const { agents, editMode } = (event as CustomEvent<{ agents: Agent[]; editMode: boolean }>).detail;
     this.editMode = editMode;
+    this.gridGraphics?.setVisible(editMode);
+    if (!editMode) { this.stationDrag = undefined; this.stationPreview?.clear(); }
     const currentIds = new Set(agents.map((agent) => agent.id));
-    this.agents.forEach(({ body }, id) => { if (!currentIds.has(id)) { body.destroy(); this.agents.delete(id); } });
+    this.agents.forEach(({ body, station }, id) => { if (!currentIds.has(id)) { body.destroy(); station.destroy(); this.agents.delete(id); } });
     agents.forEach((agent) => this.drawAgent(agent));
   };
 
@@ -79,15 +93,20 @@ export class OfficeScene extends Phaser.Scene {
       const label = this.add.text(0, -108, agent.name, { fontFamily: "Inter, sans-serif", fontSize: "16px", color: "#f6f8fb", stroke: "#13202c", strokeThickness: 4 }).setOrigin(0.5);
       const status = this.add.circle(31, -84, 5, this.statusColor(agent.status));
       const container = this.add.container(screen.x, screen.y, [shadow, sprite, label, status]).setSize(76, 108).setInteractive({ useHandCursor: true });
-      container.on("pointerdown", (pointer: Phaser.Input.Pointer) => { pointer.event.stopPropagation(); window.dispatchEvent(new CustomEvent("agent:select", { detail: agent.id })); });
-      container.on("pointerup", (pointer: Phaser.Input.Pointer) => { if (this.editMode) this.moveToCell(agent.id, pointer); });
+      const station = this.createStationMarker(screen);
+      container.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
+        pointer.event.stopPropagation();
+        window.dispatchEvent(new CustomEvent("agent:select", { detail: agent.id }));
+        if (this.editMode) { this.stationDrag = agent.id; this.previewStation(agent.id, pointer); }
+      });
       container.on("pointerover", () => container.setScale(1.08));
       container.on("pointerout", () => container.setScale(1));
-      drawn = { body: container, sprite, status, data: agent };
+      drawn = { body: container, station, sprite, status, data: agent };
       this.agents.set(agent.id, drawn);
     }
     drawn.data = agent;
     drawn.body.setDepth(screen.y);
+    drawn.station.setPosition(screen.x, screen.y).setDepth(screen.y - 1).setVisible(this.editMode);
     drawn.status.setFillStyle(this.statusColor(agent.status));
     this.playVisualState(drawn.sprite, agent);
     this.tweens.add({ targets: drawn.body, x: screen.x, y: screen.y, duration: 240, ease: "Sine.out" });
@@ -96,7 +115,32 @@ export class OfficeScene extends Phaser.Scene {
   private moveToCell(id: string, pointer: Phaser.Input.Pointer) {
     const point = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
     const cell = screenToGrid(point.x, point.y);
-    if (isInsideGrid(cell)) window.dispatchEvent(new CustomEvent("agent:move", { detail: { id, ...cell } }));
+    if (!this.isStationCellValid(id, cell)) { window.dispatchEvent(new CustomEvent("station:invalid", { detail: cell })); return; }
+    window.dispatchEvent(new CustomEvent("agent:move", { detail: { id, ...cell } }));
+  }
+
+  private createStationMarker(screen: Agent["position"]) {
+    const point = gridToScreen(screen);
+    const desk = this.add.sprite(-14, 4, "station-desk").setOrigin(0.5, 0.82).setScale(0.35);
+    const chair = this.add.sprite(18, 10, "station-chair").setOrigin(0.5, 0.82).setScale(0.35);
+    return this.add.container(point.x, point.y, [desk, chair]).setVisible(false);
+  }
+
+  private previewStation(agentId: string, pointer: Phaser.Input.Pointer) {
+    const point = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
+    const cell = screenToGrid(point.x, point.y);
+    const screen = gridToScreen(cell);
+    if (!this.stationPreview) this.stationPreview = this.add.graphics().setDepth(9999);
+    const valid = this.isStationCellValid(agentId, cell);
+    this.stationPreview.clear().fillStyle(valid ? 0x4cae9b : 0xd35c5c, 0.38).lineStyle(2, valid ? 0x9de2d2 : 0xffaaa4, 0.9).fillPoints([
+      new Phaser.Geom.Point(screen.x, screen.y - TILE_HEIGHT / 2), new Phaser.Geom.Point(screen.x + TILE_WIDTH / 2, screen.y), new Phaser.Geom.Point(screen.x, screen.y + TILE_HEIGHT / 2), new Phaser.Geom.Point(screen.x - TILE_WIDTH / 2, screen.y),
+    ], true).strokePoints([
+      new Phaser.Geom.Point(screen.x, screen.y - TILE_HEIGHT / 2), new Phaser.Geom.Point(screen.x + TILE_WIDTH / 2, screen.y), new Phaser.Geom.Point(screen.x, screen.y + TILE_HEIGHT / 2), new Phaser.Geom.Point(screen.x - TILE_WIDTH / 2, screen.y), new Phaser.Geom.Point(screen.x, screen.y - TILE_HEIGHT / 2),
+    ]);
+  }
+
+  private isStationCellValid(agentId: string, cell: Agent["position"]) {
+    return isValidStationCell(cell, agentId, [...this.agents.values()].map(({ data }) => data), this.furnitureCells);
   }
 
   private interact = (event: Event) => { void this.runInteraction((event as CustomEvent<SceneInteraction>).detail); };
@@ -175,6 +219,19 @@ export class OfficeScene extends Phaser.Scene {
       }
       context.putImageData(pixels, 0, 0);
       this.textures.addSpriteSheet(`agent-${index}-clean`, canvas as unknown as HTMLImageElement, { frameWidth: 256, frameHeight: 256 });
+    });
+  }
+
+  private createStationTextures() {
+    const source = this.textures.get("office-modular").getSourceImage() as CanvasImageSource;
+    [69, 70].forEach((frame, index) => {
+      const canvas = document.createElement("canvas"); canvas.width = 128; canvas.height = 256;
+      const context = canvas.getContext("2d")!;
+      context.drawImage(source, (frame % 22) * 128, Math.floor(frame / 22) * 256, 128, 256, 0, 0, 128, 256);
+      const pixels = context.getImageData(0, 0, 128, 256);
+      clearEdgeConnectedBackdrop(128, 256, pixels.data);
+      context.putImageData(pixels, 0, 0);
+      this.textures.addImage(index ? "station-chair" : "station-desk", canvas as unknown as HTMLImageElement);
     });
   }
 

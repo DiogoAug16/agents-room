@@ -21,14 +21,20 @@ ACTIVE_TASK_STATES = ("created", "queued", "starting", "running", "waiting_appro
 task_semaphore = asyncio.Semaphore(3)
 active_providers: dict[str, CodexAgentProvider] = {}
 write_locks: dict[str, asyncio.Lock] = {}
+FURNITURE_CELLS = frozenset({(10, 7), (11, 7), (12, 7), (13, 7), (10, 8), (11, 8), (12, 8), (13, 8)})
 
 
 def write_lock_for(project_root: str) -> asyncio.Lock:
     return write_locks.setdefault(project_root, asyncio.Lock())
 
 
+def interaction_points_for(x: int, y: int) -> list[dict[str, int]]:
+    return [{"x": point_x, "y": point_y} for point_x, point_y in ((x, y - 1), (x + 1, y), (x - 1, y)) if 0 <= point_x < 24 and 0 <= point_y < 16]
+
+
 def agent_payload(agent: Agent) -> dict:
-    return {"id": agent.id, "name": agent.name, "role": agent.role, "description": agent.description, "appearance": agent.appearance, "visualStatus": agent.visual_status, "position": {"x": agent.current_x, "y": agent.current_y}, "basePosition": {"x": agent.base_x, "y": agent.base_y}, "direction": agent.direction, "permission": agent.permission, "skills": [{"id": link.skill.id, "name": link.skill.name, "enabled": link.enabled} for link in agent.skills], "plugins": [{"id": link.plugin.id, "name": link.plugin.name, "enabled": link.enabled} for link in agent.plugins]}
+    workstation = agent.workstation
+    return {"id": agent.id, "name": agent.name, "role": agent.role, "description": agent.description, "appearance": agent.appearance, "visualStatus": agent.visual_status, "position": {"x": agent.current_x, "y": agent.current_y}, "basePosition": {"x": agent.base_x, "y": agent.base_y}, "direction": agent.direction, "permission": agent.permission, "workstation": {"position": {"x": workstation.x, "y": workstation.y}, "interactionPoints": workstation.interaction_points} if workstation else None, "skills": [{"id": link.skill.id, "name": link.skill.name, "enabled": link.enabled} for link in agent.skills], "plugins": [{"id": link.plugin.id, "name": link.plugin.name, "enabled": link.enabled} for link in agent.plugins]}
 
 
 def task_payload(task: Task) -> dict:
@@ -52,7 +58,7 @@ def seed(session: Session) -> Workspace:
     )):
         agent = Agent(workspace_id=workspace.id, name=name, role=role, description=description, appearance={"characterPreset": f"agent-{index + 1:03}"}, visual_status="working" if index == 0 else "seated", base_x=x, base_y=y, current_x=x, current_y=y)
         session.add(agent); session.flush()
-        session.add(Workstation(workspace_id=workspace.id, agent_id=agent.id, x=x, y=y, interaction_points=[{"x": x, "y": y - 1}]))
+        session.add(Workstation(workspace_id=workspace.id, agent_id=agent.id, x=x, y=y, interaction_points=interaction_points_for(x, y)))
     session.commit()
     return workspace
 
@@ -98,7 +104,7 @@ async def create_agent(workspace_id: str, body: AgentCreate, session: Session = 
     x, y = 5 + count * 2, 10
     agent = Agent(workspace_id=workspace_id, name=body.name, role=body.role, description=body.description, permission=body.permission, appearance={"characterPreset": f"agent-{count + 1:03}"}, base_x=x, base_y=y, current_x=x, current_y=y)
     session.add(agent); session.flush()
-    session.add(Workstation(workspace_id=workspace_id, agent_id=agent.id, x=x, y=y, interaction_points=[{"x": x, "y": y - 1}]))
+    session.add(Workstation(workspace_id=workspace_id, agent_id=agent.id, x=x, y=y, interaction_points=interaction_points_for(x, y)))
     session.commit(); session.refresh(agent)
     payload = agent_payload(agent)
     await emit(session, workspace_id, "agent.created", source_agent_id=agent.id, payload=payload)
@@ -110,13 +116,16 @@ async def update_position(agent_id: str, body: PositionUpdate, session: Session 
     agent = session.get(Agent, agent_id)
     if not agent:
         raise HTTPException(404, "Agent not found")
+    if (body.x, body.y) in FURNITURE_CELLS:
+        raise HTTPException(409, "A workstation cannot overlap furniture")
     occupied = session.scalar(select(Agent).where(Agent.workspace_id == agent.workspace_id, Agent.current_x == body.x, Agent.current_y == body.y, Agent.id != agent.id))
     if occupied:
         raise HTTPException(409, "A cell cannot be occupied by two agents")
     agent.current_x = agent.base_x = body.x; agent.current_y = agent.base_y = body.y
-    if agent.workstation: agent.workstation.x = body.x; agent.workstation.y = body.y
+    if agent.workstation:
+        agent.workstation.x = body.x; agent.workstation.y = body.y; agent.workstation.interaction_points = interaction_points_for(body.x, body.y)
     session.commit()
-    payload = {"x": body.x, "y": body.y}
+    payload = {"x": body.x, "y": body.y, "workstation": {"position": {"x": body.x, "y": body.y}, "interactionPoints": interaction_points_for(body.x, body.y)}}
     await emit(session, agent.workspace_id, "agent.position.changed", source_agent_id=agent.id, payload=payload)
     return payload
 

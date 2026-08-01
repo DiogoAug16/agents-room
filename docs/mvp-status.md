@@ -9,7 +9,7 @@ As sete fases abaixo agrupam os 24 passos da ordem de implementação original.
 | 0. POC Codex local | concluída | Adapter isolado, cancelamento e eval opt-in. |
 | 1. Fundação web e cena | concluída | React, Phaser, grade, conversões, câmera e sprites carregam no Electron. |
 | 2. Navegação | concluída | A* cardinal, colisão de móveis, reservas temporárias, replanejamento local e depth por eixo Y. |
-| 3. Estado persistido | parcial | SQLite, Alembic, agentes e posição-base persistem. Faltam mover a estação como grupo e destaque de células válidas/inválidas. |
+| 3. Estado persistido | parcial | SQLite, Alembic, agentes, posição-base, pontos de interação e validação visual da estação persistem. O cenário ainda é uma ilustração estática, portanto móveis de fundo não são removidos visualmente ao mover uma estação. |
 | 4. Operação | em andamento | Skills e plugins podem atribuir, pausar e remover; tarefas, WebSocket, histórico e aprovações existem. Faltam busca/filtros reais e plugins com manifestos completos. |
 | 5. Colaboração segura | parcial | Interação visual, retorno, cancelamento, aprovação e lock de escrita existem. Faltam delegação de tarefas, limites de profundidade/subtarefas e detecção de ciclos. |
 | 6. Fechamento web | pendente | Faltam E2E, cobertura dos reducers/eventos, acessibilidade e tratamento visual de falhas. |

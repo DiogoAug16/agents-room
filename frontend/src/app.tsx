@@ -80,10 +80,11 @@ export function App() {
   }, [workspaceQuery.data, queryClient]);
   useEffect(() => {
     const onSelect = (event: Event) => select((event as CustomEvent<string>).detail);
-    const onMove = (event: Event) => { const { id, x, y } = (event as CustomEvent<{ id: string; x: number; y: number }>).detail; moveAgent(id, x, y); void api.moveAgent(id, x, y).then(invalidateAgents); setEvents((items) => [`Estação movida para (${x}, ${y}).`, ...items].slice(0, 10)); };
+    const onMove = (event: Event) => { const { id, x, y } = (event as CustomEvent<{ id: string; x: number; y: number }>).detail; moveAgent(id, x, y); void api.moveAgent(id, x, y).then(invalidateAgents).catch(() => { void invalidateAgents(); setEvents((items) => ["A estação não pode ser movida para essa célula.", ...items].slice(0, 10)); }); setEvents((items) => [`Estação movida para (${x}, ${y}).`, ...items].slice(0, 10)); };
     const onDeselect = () => select(undefined);
-    window.addEventListener("agent:select", onSelect); window.addEventListener("agent:move", onMove); window.addEventListener("agent:deselect", onDeselect);
-    return () => { window.removeEventListener("agent:select", onSelect); window.removeEventListener("agent:move", onMove); window.removeEventListener("agent:deselect", onDeselect); };
+    const onInvalidStation = () => setEvents((items) => ["Célula inválida para a estação.", ...items].slice(0, 10));
+    window.addEventListener("agent:select", onSelect); window.addEventListener("agent:move", onMove); window.addEventListener("agent:deselect", onDeselect); window.addEventListener("station:invalid", onInvalidStation);
+    return () => { window.removeEventListener("agent:select", onSelect); window.removeEventListener("agent:move", onMove); window.removeEventListener("agent:deselect", onDeselect); window.removeEventListener("station:invalid", onInvalidStation); };
   }, [moveAgent, select, workspaceQuery.data, queryClient]);
   useEffect(() => { (window as Window & { selectedAgentId?: string }).selectedAgentId = selectedId; }, [selectedId]);
   useEffect(() => {

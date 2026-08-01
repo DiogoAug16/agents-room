@@ -42,14 +42,22 @@ class ApiTests(unittest.TestCase):
     def test_persists_a_station_move(self) -> None:
         workspace_id = self.workspace["id"]
         agent = self.client.post(f"/workspaces/{workspace_id}/agents", json={"name": "Lia", "role": "Backend"}).json()
-        self.assertEqual(self.client.patch(f"/agents/{agent['id']}/position", json={"x": 9, "y": 7}).json(), {"x": 9, "y": 7})
+        moved = self.client.patch(f"/agents/{agent['id']}/position", json={"x": 9, "y": 7}).json()
+        self.assertEqual(moved["workstation"], {"position": {"x": 9, "y": 7}, "interactionPoints": [{"x": 9, "y": 6}, {"x": 10, "y": 7}, {"x": 8, "y": 7}]})
         listed = self.client.get(f"/workspaces/{workspace_id}/agents").json()
-        self.assertEqual(next(item for item in listed if item["id"] == agent["id"])["basePosition"], {"x": 9, "y": 7})
+        refreshed = next(item for item in listed if item["id"] == agent["id"])
+        self.assertEqual(refreshed["basePosition"], {"x": 9, "y": 7})
+        self.assertEqual(refreshed["workstation"], moved["workstation"])
 
     def test_rejects_two_agents_in_the_same_cell(self) -> None:
         workspace_id = self.workspace["id"]
         agents = self.client.get(f"/workspaces/{workspace_id}/agents").json()
         self.assertEqual(self.client.patch(f"/agents/{agents[1]['id']}/position", json=agents[0]["position"]).status_code, 409)
+
+    def test_rejects_station_move_over_furniture(self) -> None:
+        workspace_id = self.workspace["id"]
+        agent = self.client.get(f"/workspaces/{workspace_id}/agents").json()[0]
+        self.assertEqual(self.client.patch(f"/agents/{agent['id']}/position", json={"x": 10, "y": 7}).status_code, 409)
 
     def test_persists_interaction_and_emits_requested_event(self) -> None:
         workspace_id = self.workspace["id"]

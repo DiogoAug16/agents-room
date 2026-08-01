@@ -7,6 +7,7 @@ const { startBackend } = require("./backend-process.cjs");
 const root = path.resolve(__dirname, "..");
 let backend;
 const smoke = process.env.ELECTRON_SMOKE === "1";
+const editSmoke = process.env.ELECTRON_EDIT_SMOKE === "1";
 
 function waitForBackend(retries = 50) {
   return new Promise((resolve, reject) => {
@@ -29,6 +30,10 @@ async function createWindow() {
     const window = new BrowserWindow({ width: 1440, height: 960, minWidth: 1100, minHeight: 720, show: !smoke, backgroundColor: "#121a20", webPreferences: { contextIsolation: true, nodeIntegration: false } });
     if (smoke) window.webContents.once("did-finish-load", async () => {
       await new Promise((resolve) => setTimeout(resolve, 1500));
+      if (editSmoke) {
+        await window.webContents.executeJavaScript('Array.from(document.querySelectorAll("button")).find((button) => button.textContent === "Editar sala")?.click()');
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
       if (process.env.ELECTRON_CAPTURE_PATH) await fs.writeFile(process.env.ELECTRON_CAPTURE_PATH, (await window.capturePage()).toPNG());
       console.log("PASS: Electron loaded the local application."); app.quit();
     });
