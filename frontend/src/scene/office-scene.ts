@@ -39,6 +39,7 @@ export class OfficeScene extends Phaser.Scene {
   private furnitureItems: FurnitureInstance[] = [];
   private agentSeatAssignments: AgentSeatAssignments = {};
   private selectedFurnitureIds = new Set<string>();
+  private highlightedFurnitureIds = new Set<string>();
   private stationOrigin?: Agent["position"];
   private readonly navigation = new NavigationGrid();
   private readonly seats = new SeatRegistry();
@@ -94,7 +95,7 @@ export class OfficeScene extends Phaser.Scene {
     window.addEventListener("furniture:duplicate-request", this.duplicateFurnitureRequest as EventListener);
     window.addEventListener("furniture:delete-request", this.deleteFurnitureRequest as EventListener);
     window.addEventListener("furniture:delete-force", this.deleteFurnitureForce as EventListener);
-    this.sync(new CustomEvent("agents", { detail: { agents: useSceneStore.getState().agents, editMode: useSceneStore.getState().editMode, furniture: useSceneStore.getState().furniture, agentSeatAssignments: useSceneStore.getState().agentSeatAssignments, selectedFurnitureIds: useSceneStore.getState().selectedFurnitureIds, placingFurnitureAssetId: useSceneStore.getState().placingFurnitureAssetId, placingFurnitureOrientation: useSceneStore.getState().placingFurnitureOrientation } }));
+    this.sync(new CustomEvent("agents", { detail: { agents: useSceneStore.getState().agents, editMode: useSceneStore.getState().editMode, furniture: useSceneStore.getState().furniture, agentSeatAssignments: useSceneStore.getState().agentSeatAssignments, selectedFurnitureIds: useSceneStore.getState().selectedFurnitureIds, highlightedFurnitureIds: useSceneStore.getState().selectedFurnitureIds, placingFurnitureAssetId: useSceneStore.getState().placingFurnitureAssetId, placingFurnitureOrientation: useSceneStore.getState().placingFurnitureOrientation } }));
     this.input.keyboard?.on("keydown-F", () => this.focusSelected());
     this.input.keyboard?.on("keydown-ESC", () => { if (this.placingFurnitureAssetId) window.dispatchEvent(new Event("furniture:cancel-placement")); else window.dispatchEvent(new Event("agent:deselect")); });
     (["LEFT", "RIGHT", "UP", "DOWN"] as const).forEach((key) => this.input.keyboard?.on(`keydown-${key}`, (event: KeyboardEvent) => this.nudgeFurniturePlacement({ LEFT: -1, RIGHT: 1, UP: 0, DOWN: 0 }[key], { LEFT: 0, RIGHT: 0, UP: -1, DOWN: 1 }[key], event.shiftKey ? 3 : 1)));
@@ -115,10 +116,11 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   private sync = (event: Event) => {
-    const { agents, editMode, furniture, agentSeatAssignments, selectedFurnitureIds, placingFurnitureAssetId, placingFurnitureOrientation } = (event as CustomEvent<{ agents: Agent[]; editMode: boolean; furniture: FurnitureInstance[]; agentSeatAssignments: AgentSeatAssignments; selectedFurnitureIds: string[]; placingFurnitureAssetId?: string; placingFurnitureOrientation?: FurnitureOrientation }>).detail;
+    const { agents, editMode, furniture, agentSeatAssignments, selectedFurnitureIds, highlightedFurnitureIds = selectedFurnitureIds, placingFurnitureAssetId, placingFurnitureOrientation } = (event as CustomEvent<{ agents: Agent[]; editMode: boolean; furniture: FurnitureInstance[]; agentSeatAssignments: AgentSeatAssignments; selectedFurnitureIds: string[]; highlightedFurnitureIds?: string[]; placingFurnitureAssetId?: string; placingFurnitureOrientation?: FurnitureOrientation }>).detail;
     this.editMode = editMode;
     this.agentSeatAssignments = agentSeatAssignments;
     this.selectedFurnitureIds = new Set(selectedFurnitureIds);
+    this.highlightedFurnitureIds = new Set(highlightedFurnitureIds);
     this.placingFurnitureAssetId = editMode ? placingFurnitureAssetId : undefined;
     this.placingFurnitureOrientation = editMode ? placingFurnitureOrientation : undefined;
     if (!this.placingFurnitureAssetId) { this.placementCell = undefined; this.furnitureGhost?.destroy(); this.furnitureGhost = undefined; this.stationPreview?.clear(); }
@@ -221,9 +223,10 @@ export class OfficeScene extends Phaser.Scene {
       const origin = furnitureOrigin(asset, item.orientation);
       layers.rear.setOrigin(origin.x, origin.y); layers.front?.setOrigin(origin.x, origin.y);
       this.applyFurnitureLayerCrops(layers, asset, texture);
-      const selected = this.selectedFurnitureIds.has(item.id);
+      const selected = this.selectedFurnitureIds.has(item.id), highlighted = this.highlightedFurnitureIds.has(item.id);
       layers.rear.clearTint().setPosition(screen.x, screen.y).setDepth(screen.y + (item.parentId ? 5 : layers.front ? -14 : -4)).setAlpha(this.editMode ? 1 : 0.96); if (selected) layers.rear.setTint(0xc6f2e7);
-      layers.front?.clearTint().setPosition(screen.x, screen.y).setDepth(screen.y + 10).setAlpha(this.editMode ? 1 : 0.96); if (selected) layers.front?.setTint(0xc6f2e7);
+      else if (highlighted) layers.rear.setTint(0x9ed9cf);
+      layers.front?.clearTint().setPosition(screen.x, screen.y).setDepth(screen.y + 10).setAlpha(this.editMode ? 1 : 0.96); if (selected) layers.front?.setTint(0xc6f2e7); else if (highlighted) layers.front?.setTint(0x9ed9cf);
     });
   }
 

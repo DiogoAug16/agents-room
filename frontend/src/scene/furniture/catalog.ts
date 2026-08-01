@@ -55,6 +55,10 @@ export const furnitureOrigin = (asset: FurnitureAsset, orientation: FurnitureOri
 export const defaultFurnitureOrientation = (assetId: string): FurnitureOrientation => { const asset = furnitureAsset(assetId); return asset ? furnitureOrientations(asset)[0] : "north_east"; };
 export const furnitureSeat = (asset: FurnitureAsset, orientation: FurnitureOrientation) => asset.seatByOrientation?.[orientation] ?? asset.seat;
 export const furnitureSeats = (asset: FurnitureAsset) => asset.seats ?? (asset.seat ? [{ id: "seat", ...asset.seat }] : []);
+export const highlightedFurnitureIds = (items: FurnitureInstance[], groups: FurnitureGroup[], selectedId: string | undefined, selectedIds: string[]) => {
+  const group = groups.find((value) => value.id === items.find((item) => item.id === selectedId)?.groupId);
+  return group ? group.instanceIds : selectedIds;
+};
 export const linkedFurnitureIds = (items: FurnitureInstance[], id: string) => {
   const pivot = items.find((item) => item.id === id); if (!pivot) return new Set<string>();
   const ids = new Set(items.filter((item) => item.id === id || (pivot.groupId && item.groupId === pivot.groupId)).map((item) => item.id));

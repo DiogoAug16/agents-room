@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FURNITURE_ASSETS, furnitureCells, furnitureImage, furnitureInteractionPoints, furnitureOrientations, furnitureSeat, furnitureSeats, movedFurnitureInstances, removableFurnitureIds } from "./catalog";
+import { FURNITURE_ASSETS, furnitureCells, furnitureImage, furnitureInteractionPoints, furnitureOrientations, furnitureSeat, furnitureSeats, highlightedFurnitureIds, movedFurnitureInstances, removableFurnitureIds } from "./catalog";
 
 describe("furniture catalog", () => {
   it("turns a furniture footprint into blocked grid cells", () => {
@@ -39,6 +39,11 @@ describe("furniture catalog", () => {
   it("moves a furniture group together with surface attachments", () => {
     const items = [{ id: "desk", assetId: "desk.work.light.01", position: { x: 10, y: 20 }, orientation: "north_west" as const, createdAt: "now", groupId: "station" }, { id: "monitor", assetId: "monitor.black.01", position: { x: 10, y: 20 }, orientation: "north_east" as const, createdAt: "now", groupId: "station", parentId: "desk", surfaceOffset: { x: 8, y: -28 } }];
     expect(movedFurnitureInstances(items, "desk", { x: 12, y: 21 })?.map((item) => item.position)).toEqual([{ x: 12, y: 21 }, { x: 12, y: 21 }]);
+  });
+
+  it("highlights every member of the group containing the active furniture", () => {
+    const items = [{ id: "desk", assetId: "desk.work.light.01", position: { x: 10, y: 20 }, orientation: "north_west" as const, createdAt: "now", groupId: "station" }, { id: "chair", assetId: "chair.office.black.01", position: { x: 10, y: 23 }, orientation: "north_east" as const, createdAt: "now", groupId: "station" }];
+    expect(highlightedFurnitureIds(items, [{ id: "station", name: "Estação", instanceIds: ["desk", "chair"], groupType: "workstation" }], "chair", ["chair"])).toEqual(["desk", "chair"]);
   });
 
   it("removes a full group with its attached surface objects", () => {
