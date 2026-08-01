@@ -67,7 +67,7 @@ class ApiTests(unittest.TestCase):
             self.assertEqual(response.status_code, 201)
             for _ in range(20):
                 event = socket.receive_json()
-                if event["type"] == "agent.interaction.requested":
+                if event["type"] == "agent.interaction.requested" and event["payload"].get("summary") == "Solicitando revisão da rota.":
                     break
             else:
                 self.fail("Interaction event was not emitted")
@@ -118,11 +118,37 @@ class ApiTests(unittest.TestCase):
         task = self.client.post(f"/agents/{agent['id']}/tasks", json={"prompt": "crie um arquivo", "access_mode": "workspace_write"}).json()
         self.assertEqual(task["state"], "waiting_approval")
         approvals = self.client.get(f"/workspaces/{workspace_id}/approvals").json()
-        self.assertEqual(len(approvals), 1)
-        decision = self.client.post(f"/approvals/{approvals[0]['id']}/decision", json={"approved": False})
+        approval = next(item for item in approvals if item["taskId"] == task["id"])
+        decision = self.client.post(f"/approvals/{approval['id']}/decision", json={"approved": False})
         self.assertEqual(decision.json()["state"], "rejected")
         history = self.client.get(f"/agents/{agent['id']}/tasks").json()
         self.assertEqual(history[0]["state"], "cancelled")
+
+    def test_delegation_links_tasks_starts_after_interaction_and_cascades_cancel(self) -> None:
+        workspace_id = self.workspace["id"]
+        agents = self.client.get(f"/workspaces/{workspace_id}/agents").json()
+        parent = self.client.post(f"/agents/{agents[0]['id']}/tasks", json={"prompt": "implemente a tarefa", "access_mode": "workspace_write"}).json()
+        delegated = self.client.post(f"/tasks/{parent['id']}/delegations", json={"target_agent_id": agents[1]["id"], "prompt": "crie os testes", "summary": "Delegando a criação dos testes unitários."})
+        self.assertEqual(delegated.status_code, 202)
+        child = delegated.json()
+        child_history = self.client.get(f"/agents/{agents[1]['id']}/tasks").json()[0]
+        self.assertEqual(child_history["parentTaskId"], parent["id"])
+        self.assertEqual(child_history["delegationDepth"], 1)
+        self.assertEqual(child_history["state"], "waiting_approval")
+        self.assertEqual(self.client.post(f"/interactions/{child['interactionId']}/started").status_code, 200)
+        self.assertEqual(self.client.post(f"/interactions/{child['interactionId']}/completed").status_code, 200)
+        cancelled = self.client.post(f"/tasks/{parent['id']}/cancel")
+        self.assertEqual(cancelled.status_code, 200)
+        self.assertEqual(self.client.get(f"/agents/{agents[1]['id']}/tasks").json()[0]["state"], "cancelled")
+
+    def test_delegation_rejects_agent_cycle(self) -> None:
+        workspace_id = self.workspace["id"]
+        agents = self.client.get(f"/workspaces/{workspace_id}/agents").json()
+        parent = self.client.post(f"/agents/{agents[0]['id']}/tasks", json={"prompt": "coordene a tarefa", "access_mode": "workspace_write"}).json()
+        first = self.client.post(f"/tasks/{parent['id']}/delegations", json={"target_agent_id": agents[1]["id"], "prompt": "revise", "summary": "Solicitando revisão."}).json()
+        self.assertEqual(self.client.post(f"/tasks/{first['id']}/delegations", json={"target_agent_id": agents[0]["id"], "prompt": "retorne", "summary": "Retornando contexto."}).status_code, 409)
+        self.client.post(f"/interactions/{first['interactionId']}/failed")
+        self.client.post(f"/tasks/{parent['id']}/cancel")
 
 
 if __name__ == "__main__":

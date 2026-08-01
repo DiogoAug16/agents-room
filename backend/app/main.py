@@ -13,7 +13,7 @@ from .codex_provider import CodexAgentProvider
 from .database import Base, SessionLocal, engine, get_session
 from .events import emit, manager, replay
 from .models import Agent, AgentInteraction, AgentPlugin, AgentSkill, Approval, Plugin, Skill, Task, Workspace, Workstation, now
-from .schemas import AgentCreate, ApprovalDecision, InteractionCreate, PluginAssignment, PluginEnabledUpdate, PositionUpdate, SkillAssignment, SkillEnabledUpdate, TaskCreate
+from .schemas import AgentCreate, ApprovalDecision, DelegationCreate, InteractionCreate, PluginAssignment, PluginEnabledUpdate, PositionUpdate, SkillAssignment, SkillEnabledUpdate, TaskCreate
 from .workspace_metadata import current_git_branch
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -22,6 +22,9 @@ task_semaphore = asyncio.Semaphore(3)
 active_providers: dict[str, CodexAgentProvider] = {}
 write_locks: dict[str, asyncio.Lock] = {}
 FURNITURE_CELLS = frozenset({(10, 7), (11, 7), (12, 7), (13, 7), (10, 8), (11, 8), (12, 8), (13, 8)})
+MAX_DELEGATION_DEPTH = 2
+MAX_SUBTASKS_PER_TASK = 4
+TASK_TIMEOUT_SECONDS = 600
 
 
 def write_lock_for(project_root: str) -> asyncio.Lock:
@@ -38,7 +41,32 @@ def agent_payload(agent: Agent) -> dict:
 
 
 def task_payload(task: Task) -> dict:
-    return {"id": task.id, "prompt": task.prompt, "state": task.state, "accessMode": task.access_mode, "result": task.result, "createdAt": task.created_at.isoformat(), "finishedAt": task.finished_at.isoformat() if task.finished_at else None}
+    return {"id": task.id, "prompt": task.prompt, "state": task.state, "accessMode": task.access_mode, "parentTaskId": task.parent_task_id, "delegationDepth": task.delegation_depth, "result": task.result, "createdAt": task.created_at.isoformat(), "finishedAt": task.finished_at.isoformat() if task.finished_at else None}
+
+
+def task_ancestors(session: Session, task: Task) -> list[Task]:
+    ancestors: list[Task] = []
+    seen: set[str] = set()
+    current: Task | None = task
+    while current:
+        if current.id in seen:
+            raise HTTPException(409, "Task delegation cycle detected")
+        seen.add(current.id)
+        ancestors.append(current)
+        current = session.get(Task, current.parent_task_id) if current.parent_task_id else None
+    return ancestors
+
+
+def task_descendants(session: Session, root_id: str) -> list[Task]:
+    pending = [root_id]
+    seen = {root_id}
+    descendants: list[Task] = []
+    while pending:
+        children = session.scalars(select(Task).where(Task.parent_task_id.in_(pending))).all()
+        pending = [child.id for child in children if child.id not in seen]
+        seen.update(pending)
+        descendants.extend(child for child in children if child.id in pending)
+    return descendants
 
 
 def seed(session: Session) -> Workspace:
@@ -48,7 +76,7 @@ def seed(session: Session) -> Workspace:
             session.add(Plugin(id="codex-local", name="Codex Local", description="Sessões Codex locais para agentes.", manifest={"permissions": ["read_only", "workspace_write"]}))
             session.commit()
         return workspace
-    workspace = Workspace(name="Agents Room", project_root=str(ROOT), settings={"max_agents": 8, "max_parallel_tasks": 3})
+    workspace = Workspace(name="Agents Room", project_root=str(ROOT), settings={"max_agents": 8, "max_parallel_tasks": 3, "cancel_delegations_on_parent_cancel": True})
     session.add(workspace)
     session.add_all([Skill(id="fastapi", name="FastAPI", description="APIs locais tipadas", category="Backend"), Skill(id="testing", name="Testes", description="Testes e regressões", category="Qualidade"), Skill(id="ui", name="Interface", description="Fluxos React e acessibilidade", category="Frontend"), Plugin(id="codex-local", name="Codex Local", description="Sessões Codex locais para agentes.", manifest={"permissions": ["read_only", "workspace_write"]})])
     session.flush()
@@ -229,7 +257,11 @@ async def execute_task(task_id: str) -> None:
             await emit(session, task.workspace_id, "task.started", source_agent_id=task.agent_id, task_id=task.id, payload={"summary": "Codex iniciou a tarefa."})
             provider = CodexAgentProvider(ROOT)
             active_providers[task.id] = provider
-            events = await asyncio.to_thread(lambda: list(provider.run(task.prompt, task.access_mode)))
+            try:
+                events = await asyncio.wait_for(asyncio.to_thread(lambda: list(provider.run(task.prompt, task.access_mode))), timeout=TASK_TIMEOUT_SECONDS)
+            except TimeoutError:
+                provider.cancel()
+                raise RuntimeError("Codex task timed out")
             task = session.get(Task, task_id)
             if task and task.state != "cancelled":
                 task.state = "succeeded"; task.result = "Concluída pelo Codex."; task.finished_at = now(); task.agent.visual_status = "completed"; session.commit()
@@ -270,6 +302,43 @@ def list_tasks(agent_id: str, session: Session = Depends(get_session)) -> list[d
     return [task_payload(task) for task in session.scalars(select(Task).where(Task.agent_id == agent_id).order_by(Task.created_at.desc()).limit(12)).all()]
 
 
+@app.post("/tasks/{task_id}/delegations", status_code=202)
+async def delegate_task(task_id: str, body: DelegationCreate, session: Session = Depends(get_session)) -> dict:
+    parent = session.get(Task, task_id)
+    target = session.get(Agent, body.target_agent_id)
+    if not parent or not target:
+        raise HTTPException(404, "Task or target agent not found")
+    if parent.state not in ACTIVE_TASK_STATES:
+        raise HTTPException(409, "Only an active task can delegate")
+    if target.workspace_id != parent.workspace_id or target.id == parent.agent_id:
+        raise HTTPException(409, "Delegation target must be another agent in the same workspace")
+    if session.scalar(select(Task).where(Task.agent_id == target.id, Task.state.in_(ACTIVE_TASK_STATES))):
+        raise HTTPException(409, "Target agent already has an active task")
+    ancestors = task_ancestors(session, parent)
+    if target.id in {ancestor.agent_id for ancestor in ancestors}:
+        raise HTTPException(409, "Delegation would create an agent cycle")
+    if parent.delegation_depth >= MAX_DELEGATION_DEPTH:
+        raise HTTPException(409, "Maximum delegation depth reached")
+    if len(session.scalars(select(Task.id).where(Task.parent_task_id == parent.id)).all()) >= MAX_SUBTASKS_PER_TASK:
+        raise HTTPException(409, "Maximum subtasks reached")
+    requires_approval = parent.access_mode == "workspace_write"
+    child = Task(workspace_id=parent.workspace_id, agent_id=target.id, parent_task_id=parent.id, delegation_depth=parent.delegation_depth + 1, prompt=body.prompt, access_mode=parent.access_mode, state="waiting_approval" if requires_approval else "queued")
+    target.visual_status = "waiting_approval" if requires_approval else "queued"
+    session.add(child); session.flush()
+    interaction = AgentInteraction(workspace_id=parent.workspace_id, source_agent_id=parent.agent_id, target_agent_id=target.id, task_id=child.id, kind="delegation", summary=body.summary)
+    session.add(interaction)
+    approval = Approval(task_id=child.id, kind="workspace_write", summary="A subtarefa delegada pode modificar arquivos dentro do workspace selecionado.") if requires_approval else None
+    if approval:
+        session.add(approval)
+    session.commit(); session.refresh(child)
+    interaction_payload = {"interactionId": interaction.id, "kind": interaction.kind, "summary": interaction.summary, "taskId": child.id}
+    await emit(session, parent.workspace_id, "agent.interaction.requested", source_agent_id=parent.agent_id, target_agent_id=target.id, task_id=parent.id, payload=interaction_payload)
+    await emit(session, parent.workspace_id, "task.created", source_agent_id=target.id, task_id=child.id, payload={"summary": "Subtarefa delegada e aguardando interação.", "parentTaskId": parent.id, "delegationDepth": child.delegation_depth})
+    if approval:
+        await emit(session, parent.workspace_id, "task.approval.requested", source_agent_id=target.id, task_id=child.id, payload={"approvalId": approval.id, "summary": approval.summary})
+    return {"id": child.id, "state": child.state, "interactionId": interaction.id, "parentTaskId": parent.id, "delegationDepth": child.delegation_depth}
+
+
 @app.get("/workspaces/{workspace_id}/approvals")
 def list_approvals(workspace_id: str, session: Session = Depends(get_session)) -> list[dict]:
     approvals = session.scalars(select(Approval).join(Task).where(Task.workspace_id == workspace_id, Approval.state == "pending")).all()
@@ -287,7 +356,8 @@ async def decide_approval(approval_id: str, body: ApprovalDecision, session: Ses
     if not body.approved: task.finished_at = now()
     session.commit()
     await emit(session, task.workspace_id, "approval.decided", source_agent_id=task.agent_id, task_id=task.id, payload={"approvalId": approval.id, "approved": body.approved, "summary": "Ação aprovada." if body.approved else "Ação rejeitada."})
-    if body.approved: asyncio.create_task(execute_task(task.id))
+    interaction = session.scalar(select(AgentInteraction).where(AgentInteraction.task_id == task.id, AgentInteraction.state.in_(("requested", "started"))))
+    if body.approved and (not interaction or interaction.state == "started"): asyncio.create_task(execute_task(task.id))
     else: await emit(session, task.workspace_id, "task.cancelled", source_agent_id=task.agent_id, task_id=task.id, payload={"summary": "Tarefa rejeitada na aprovação."})
     return {"id": approval.id, "state": approval.state}
 
@@ -297,10 +367,20 @@ async def cancel_task(task_id: str, session: Session = Depends(get_session)) -> 
     task = session.get(Task, task_id)
     if not task: raise HTTPException(404, "Task not found")
     if task.state in ("cancelled", "succeeded", "failed"): return {"id": task.id, "state": task.state}
-    provider = active_providers.get(task.id)
-    if provider: provider.cancel()
-    task.state = "cancelled"; task.finished_at = now(); task.agent.visual_status = "idle"; session.commit()
-    await emit(session, task.workspace_id, "task.cancelled", source_agent_id=task.agent_id, task_id=task.id, payload={"summary": "Tarefa cancelada."})
+    workspace = session.get(Workspace, task.workspace_id)
+    cancelled = [task]
+    if workspace.settings.get("cancel_delegations_on_parent_cancel", True):
+        cancelled.extend(task_descendants(session, task.id))
+    active = [item for item in cancelled if item.state not in ("cancelled", "succeeded", "failed")]
+    for item in active:
+        provider = active_providers.get(item.id)
+        if provider: provider.cancel()
+        item.state = "cancelled"; item.finished_at = now(); item.agent.visual_status = "idle"
+        approval = session.scalar(select(Approval).where(Approval.task_id == item.id, Approval.state == "pending"))
+        if approval: approval.state = "cancelled"; approval.decided_at = now()
+    session.commit()
+    for item in active:
+        await emit(session, item.workspace_id, "task.cancelled", source_agent_id=item.agent_id, task_id=item.id, payload={"summary": "Tarefa cancelada." if item.id == task.id else "Subtarefa cancelada em cascata.", "parentTaskId": item.parent_task_id})
     return {"id": task.id, "state": task.state}
 
 
@@ -322,10 +402,15 @@ async def request_interaction(agent_id: str, body: InteractionCreate, session: S
 async def start_interaction(interaction_id: str, session: Session = Depends(get_session)) -> dict:
     interaction = session.get(AgentInteraction, interaction_id)
     if not interaction: raise HTTPException(404, "Interaction not found")
-    if interaction.state == "requested": interaction.state = "started"; session.commit()
+    if interaction.state not in ("requested", "started"):
+        return {"id": interaction.id, "state": interaction.state}
+    should_start_task = interaction.state == "requested"
+    if should_start_task: interaction.state = "started"; session.commit()
     payload = {"interactionId": interaction.id, "kind": interaction.kind, "summary": interaction.summary}
     await emit(session, interaction.workspace_id, "agent.interaction.started", source_agent_id=interaction.source_agent_id, target_agent_id=interaction.target_agent_id, payload=payload)
     await emit(session, interaction.workspace_id, "agent.interaction.message", source_agent_id=interaction.source_agent_id, target_agent_id=interaction.target_agent_id, payload=payload)
+    child = session.get(Task, interaction.task_id) if should_start_task and interaction.task_id else None
+    if child and child.state == "queued": asyncio.create_task(execute_task(child.id))
     return {"id": interaction.id, "state": interaction.state}
 
 
@@ -333,6 +418,8 @@ async def start_interaction(interaction_id: str, session: Session = Depends(get_
 async def complete_interaction(interaction_id: str, session: Session = Depends(get_session)) -> dict:
     interaction = session.get(AgentInteraction, interaction_id)
     if not interaction: raise HTTPException(404, "Interaction not found")
+    if interaction.state == "failed":
+        return {"id": interaction.id, "state": interaction.state}
     if interaction.state != "completed": interaction.state = "completed"; interaction.completed_at = now(); session.commit()
     payload = {"interactionId": interaction.id, "summary": interaction.summary}
     await emit(session, interaction.workspace_id, "agent.interaction.completed", source_agent_id=interaction.source_agent_id, target_agent_id=interaction.target_agent_id, payload=payload)
@@ -343,9 +430,14 @@ async def complete_interaction(interaction_id: str, session: Session = Depends(g
 async def fail_interaction(interaction_id: str, session: Session = Depends(get_session)) -> dict:
     interaction = session.get(AgentInteraction, interaction_id)
     if not interaction: raise HTTPException(404, "Interaction not found")
-    if interaction.state != "completed": interaction.state = "failed"; interaction.completed_at = now(); session.commit()
+    child = session.get(Task, interaction.task_id) if interaction.task_id else None
+    cancelled_child = child and child.state not in ("cancelled", "succeeded", "failed")
+    if interaction.state != "completed": interaction.state = "failed"; interaction.completed_at = now()
+    if cancelled_child: child.state = "cancelled"; child.finished_at = now(); child.agent.visual_status = "idle"
+    session.commit()
     payload = {"interactionId": interaction.id, "summary": "Não foi possível encontrar uma rota para a interação."}
     await emit(session, interaction.workspace_id, "agent.interaction.completed", source_agent_id=interaction.source_agent_id, target_agent_id=interaction.target_agent_id, payload=payload)
+    if cancelled_child: await emit(session, child.workspace_id, "task.cancelled", source_agent_id=child.agent_id, task_id=child.id, payload={"summary": "Subtarefa cancelada porque a interação não encontrou rota."})
     return {"id": interaction.id, "state": interaction.state}
 
 

@@ -39,6 +39,7 @@ cd electron && npm run smoke
 ```bash
 cd frontend && npm run build && npm test
 cd backend && PYTHONPATH=. .venv/bin/python -m unittest discover -s tests -v
+cd backend && PYTHONPATH=. .venv/bin/python evals/delegation_policy_check.py
 cd backend && PYTHONPATH=. RUN_CODEX_EVAL=1 .venv/bin/python evals/codex_provider_smoke.py
 ```
 

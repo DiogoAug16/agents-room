@@ -7,7 +7,7 @@ type ApiAgent = { id: string; name: string; role: string; description: string; v
 export type Workspace = { id: string; name: string; room: { width: number; height: number }; projectRoot: string; gitBranch: string | null };
 export type Plugin = { id: string; name: string; description: string; manifest: { permissions?: string[] } };
 export type Approval = { id: string; taskId: string; kind: string; summary: string };
-export type Task = { id: string; prompt: string; state: string; accessMode: string; result?: string; createdAt: string; finishedAt?: string };
+export type Task = { id: string; prompt: string; state: string; accessMode: string; parentTaskId?: string; delegationDepth: number; result?: string; createdAt: string; finishedAt?: string };
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${baseUrl}${path}`, { headers: { "content-type": "application/json", ...(init?.headers ?? {}) }, ...init });
@@ -31,6 +31,7 @@ export const api = {
   removePlugin: (agentId: string, pluginId: string) => request<void>(`/agents/${agentId}/plugins/${pluginId}`, { method: "DELETE" }),
   updatePlugin: (agentId: string, pluginId: string, enabled: boolean) => request<{ pluginId: string; enabled: boolean }>(`/agents/${agentId}/plugins/${pluginId}`, { method: "PATCH", body: JSON.stringify({ enabled }) }),
   createTask: (agentId: string, prompt: string, accessMode = "read_only") => request<{ id: string; state: string }>(`/agents/${agentId}/tasks`, { method: "POST", body: JSON.stringify({ prompt, access_mode: accessMode }) }),
+  delegateTask: (taskId: string, targetAgentId: string, prompt: string, summary: string) => request<{ id: string; state: string }>(`/tasks/${taskId}/delegations`, { method: "POST", body: JSON.stringify({ target_agent_id: targetAgentId, prompt, summary }) }),
   tasks: (agentId: string) => request<Task[]>(`/agents/${agentId}/tasks`),
   cancelTask: (taskId: string) => request<{ id: string; state: string }>(`/tasks/${taskId}/cancel`, { method: "POST" }),
   approvals: (workspaceId: string) => request<Approval[]>(`/workspaces/${workspaceId}/approvals`),

@@ -41,6 +41,12 @@ class TaskCreate(BaseModel):
     access_mode: Permission = "read_only"
 
 
+class DelegationCreate(BaseModel):
+    target_agent_id: str
+    prompt: str = Field(min_length=1, max_length=20000)
+    summary: str = Field(min_length=3, max_length=500)
+
+
 class ApprovalDecision(BaseModel):
     approved: bool
 

@@ -9,6 +9,8 @@ branch_labels = None
 depends_on = None
 
 def upgrade():
+    if sa.inspect(op.get_bind()).has_table("agent_interactions"):
+        return
     op.create_table("agent_interactions",
         sa.Column("id", sa.String(), primary_key=True),
         sa.Column("workspace_id", sa.String(), sa.ForeignKey("workspaces.id"), nullable=False),

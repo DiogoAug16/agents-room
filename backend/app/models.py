@@ -106,6 +106,8 @@ class Task(Base):
     id: Mapped[str] = mapped_column(String, primary_key=True, default=new_id)
     workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id"), index=True)
     agent_id: Mapped[str] = mapped_column(ForeignKey("agents.id"), index=True)
+    parent_task_id: Mapped[str | None] = mapped_column(ForeignKey("tasks.id"), nullable=True, index=True)
+    delegation_depth: Mapped[int] = mapped_column(Integer, default=0)
     prompt: Mapped[str] = mapped_column(Text)
     state: Mapped[str] = mapped_column(String(32), default="created", index=True)
     access_mode: Mapped[str] = mapped_column(String(32), default="read_only")
