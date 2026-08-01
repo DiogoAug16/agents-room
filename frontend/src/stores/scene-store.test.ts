@@ -127,6 +127,21 @@ describe("furniture editor history", () => {
     expect(furniture.every((item) => item.groupId === furnitureGroups[0].id)).toBe(true);
   });
 
+  it("renames only a selected custom group and keeps it undoable", () => {
+    const store = useSceneStore.getState();
+    store.addFurniture("chair.office.black.01", { x: 10, y: 20 });
+    store.addFurniture("water.dispenser.01", { x: 14, y: 20 });
+    const [chair, dispenser] = useSceneStore.getState().furniture;
+    store.selectFurniture(chair.id);
+    store.selectFurniture(dispenser.id, true);
+    store.groupSelectedFurniture();
+    expect(store.renameSelectedFurnitureGroup("Ponto de foco")).toBe(true);
+    expect(useSceneStore.getState().furnitureGroups[0].name).toBe("Ponto de foco");
+    useSceneStore.getState().undoFurniture();
+    expect(useSceneStore.getState().furnitureGroups[0].name).toBe("Grupo 1");
+    expect(store.renameSelectedFurnitureGroup(" ")).toBe(false);
+  });
+
   it("ungroups selected furniture and moves the preserved multi-selection together", () => {
     const store = useSceneStore.getState();
     store.addFurniture("chair.office.black.01", { x: 10, y: 20 });

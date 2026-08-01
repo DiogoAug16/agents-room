@@ -39,6 +39,12 @@ function AddAgentDialog({ onCreate }: { onCreate: (form: AgentForm) => Promise<v
   return <Dialog.Root open={open} onOpenChange={setOpen}><Dialog.Trigger className="primary">+ Agente</Dialog.Trigger><Dialog.Portal><Dialog.Overlay className="dialog-overlay" /><Dialog.Content className="dialog"><Dialog.Title>Novo agente</Dialog.Title><Dialog.Description>Cria a estação e seleciona o novo agente.</Dialog.Description><form onSubmit={handleSubmit(submit)}><label>Nome<input {...register("name")} autoFocus /></label>{errors.name && <p className="form-error">{errors.name.message}</p>}<label>Função<input {...register("role")} /></label>{errors.role && <p className="form-error">{errors.role.message}</p>}<div className="dialog-actions"><Dialog.Close className="button">Cancelar</Dialog.Close><button className="primary" disabled={isSubmitting} type="submit">Criar</button></div></form></Dialog.Content></Dialog.Portal></Dialog.Root>;
 }
 
+function GroupNameEditor({ group, onRename }: { group: { id: string; name: string }; onRename: (name: string) => void }) {
+  const [name, setName] = useState(group.name);
+  useEffect(() => setName(group.name), [group.id, group.name]);
+  return <section className="group-name-editor" aria-label="Editar grupo personalizado"><label>Grupo personalizado<input aria-label="Nome do grupo" value={name} maxLength={128} onChange={(event) => setName(event.target.value)} /></label><button className="primary" disabled={!name.trim() || name.trim() === group.name} onClick={() => onRename(name)}>Salvar nome</button></section>;
+}
+
 export function App() {
   const agents = useSceneStore((state) => state.agents);
   const selectedId = useSceneStore((state) => state.selectedId);
@@ -58,6 +64,7 @@ export function App() {
   const placingFurnitureAssetId = useSceneStore((state) => state.placingFurnitureAssetId);
   const placingFurnitureOrientation = useSceneStore((state) => state.placingFurnitureOrientation);
   const selectedFurniture = furniture.find((item) => item.id === selectedFurnitureId);
+  const selectedFurnitureGroup = furnitureGroups.find((group) => group.id === selectedFurniture?.groupId);
   const canRotateSelectedFurniture = Boolean(selectedFurniture && furnitureOrientations(furnitureAsset(selectedFurniture.assetId)!).length > 1);
   const canUngroupSelectedFurniture = Boolean(selectedFurniture?.groupId && furnitureGroups.some((group) => group.id === selectedFurniture.groupId));
   const addFurniture = useSceneStore((state) => state.addFurniture);
@@ -73,6 +80,7 @@ export function App() {
   const selectFurniture = useSceneStore((state) => state.selectFurniture);
   const groupSelectedFurniture = useSceneStore((state) => state.groupSelectedFurniture);
   const ungroupSelectedFurniture = useSceneStore((state) => state.ungroupSelectedFurniture);
+  const renameSelectedFurnitureGroup = useSceneStore((state) => state.renameSelectedFurnitureGroup);
   const replaceOfficeLayout = useSceneStore((state) => state.replaceOfficeLayout);
   const assignAgentSeat = useSceneStore((state) => state.assignAgentSeat);
   const createWorkstationPreset = useSceneStore((state) => state.createWorkstationPreset);
@@ -205,6 +213,10 @@ export function App() {
     if (!restoreDefaultFurniture()) { reportError("Não foi possível restaurar as estações padrão."); return; }
     setEvents((items) => ["Layout padrão restaurado para os agentes atuais.", ...items].slice(0, 10));
   };
+  const renameGroup = (name: string) => {
+    if (!renameSelectedFurnitureGroup(name)) { reportError("Informe um nome de grupo personalizado válido."); return; }
+    setEvents((items) => [`Grupo renomeado para ${name.trim()}.`, ...items].slice(0, 10));
+  };
   const applyLayoutAction = () => {
     if (pendingLayoutAction === "clear") { clearFurniture(); setEvents((items) => ["Layout da sala limpo.", ...items].slice(0, 10)); }
     if (pendingLayoutAction === "restore") restoreDefaultLayout();
@@ -261,5 +273,5 @@ export function App() {
     <section className="event-panel panel">{lastError && <p className="error-banner" role="alert">{lastError}<button aria-label="Fechar erro" onClick={() => setLastError(undefined)}>×</button></p>}<div className="panel-heading"><h2>Eventos</h2><span>stream local</span></div><ol aria-live="polite">{events.map((event, index) => <li key={`${event}-${index}`}><time>agora</time>{event}</li>)}</ol></section>
     <Dialog.Root open={Boolean(pendingFurnitureDeletion)} onOpenChange={(open) => { if (!open) setPendingFurnitureDeletion(undefined); }}><Dialog.Portal><Dialog.Overlay className="dialog-overlay" /><Dialog.Content className="dialog"><Dialog.Title>Remover móvel em uso?</Dialog.Title><Dialog.Description>{pendingFurnitureDeletion?.agentNames.join(", ")} {pendingFurnitureDeletion?.agentNames.length === 1 ? "perderá a estação ou assento associado." : "perderão a estação ou assento associado."}</Dialog.Description><div className="dialog-actions"><Dialog.Close className="button">Cancelar</Dialog.Close><button className="primary" onClick={() => { if (pendingFurnitureDeletion) window.dispatchEvent(new CustomEvent("furniture:delete-force", { detail: pendingFurnitureDeletion.id })); setPendingFurnitureDeletion(undefined); }}>Remover mesmo assim</button></div></Dialog.Content></Dialog.Portal></Dialog.Root>
     <Dialog.Root open={Boolean(pendingLayoutAction)} onOpenChange={(open) => { if (!open) setPendingLayoutAction(undefined); }}><Dialog.Portal><Dialog.Overlay className="dialog-overlay" /><Dialog.Content className="dialog"><Dialog.Title>{pendingLayoutAction === "clear" ? "Limpar escritório?" : "Restaurar layout padrão?"}</Dialog.Title><Dialog.Description>{pendingLayoutAction === "clear" ? `Isso removerá ${furniture.length} móveis e ${Object.keys(agentSeatAssignments).length} associações de cadeira.` : `Isso substituirá ${furniture.length} móveis e ${Object.keys(agentSeatAssignments).length} associações pelas estações dos ${agents.length} agentes atuais.`} Você poderá desfazer a alteração.</Dialog.Description><div className="dialog-actions"><Dialog.Close className="button">Cancelar</Dialog.Close><button className={pendingLayoutAction === "clear" ? "danger-button" : "primary"} onClick={applyLayoutAction}>{pendingLayoutAction === "clear" ? "Limpar sala" : "Restaurar padrão"}</button></div></Dialog.Content></Dialog.Portal></Dialog.Root>
-  </main></DndContext>;
+  </main>{selectedFurnitureGroup?.groupType === "custom" && <GroupNameEditor group={selectedFurnitureGroup} onRename={renameGroup} />}</DndContext>;
 }

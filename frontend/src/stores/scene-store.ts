@@ -52,6 +52,7 @@ type SceneStore = {
   selectFurniture: (id?: string, additive?: boolean) => void;
   groupSelectedFurniture: () => void;
   ungroupSelectedFurniture: () => void;
+  renameSelectedFurnitureGroup: (name: string) => boolean;
   replaceOfficeLayout: (items: FurnitureInstance[], groups: FurnitureGroup[], assignments: AgentSeatAssignments) => void;
   assignAgentSeat: (agentId: string, seatInstanceId?: string) => void;
   createWorkstationPreset: (agentId: string, position: FurnitureInstance["position"]) => boolean;
@@ -163,6 +164,17 @@ export const useSceneStore = create<SceneStore>((set) => ({
     const ids = new Set(group.instanceIds);
     return { furniture: state.furniture.map((item) => ids.has(item.id) ? { ...item, groupId: undefined } : item), furnitureGroups: state.furnitureGroups.filter((item) => item.id !== group.id), selectedFurnitureIds: group.instanceIds, furniturePast: [...state.furniturePast, snapshot(state)], furnitureFuture: [] };
   }),
+  renameSelectedFurnitureGroup: (name) => {
+    let renamed = false;
+    set((state) => {
+      const groupId = state.furniture.find((item) => item.id === state.selectedFurnitureId)?.groupId;
+      const group = state.furnitureGroups.find((item) => item.id === groupId), trimmed = name.trim();
+      if (!group || group.groupType !== "custom" || !trimmed || trimmed.length > 128) return state;
+      renamed = true;
+      return { furnitureGroups: state.furnitureGroups.map((item) => item.id === group.id ? { ...item, name: trimmed } : item), furniturePast: [...state.furniturePast, snapshot(state)], furnitureFuture: [] };
+    });
+    return renamed;
+  },
   replaceOfficeLayout: (furniture, furnitureGroups, agentSeatAssignments) => set({ furniture, furnitureGroups, agentSeatAssignments, selectedFurnitureId: undefined, selectedFurnitureIds: [], furniturePast: [], furnitureFuture: [] }),
   assignAgentSeat: (agentId, seatInstanceId) => set((state) => {
     const agentSeatAssignments = { ...state.agentSeatAssignments };
