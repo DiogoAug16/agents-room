@@ -9,4 +9,8 @@ describe("furniture catalog", () => {
   it("defines a front occlusion layer for every usable seat", () => {
     expect(FURNITURE_ASSETS.filter((asset) => asset.seat).every((asset) => asset.frontOcclusionStart !== undefined)).toBe(true);
   });
+
+  it("keeps every floor furniture asset out of the navigation grid", () => {
+    expect(FURNITURE_ASSETS.filter((asset) => !asset.surface).every((asset) => asset.footprint.length > 0)).toBe(true);
+  });
 });

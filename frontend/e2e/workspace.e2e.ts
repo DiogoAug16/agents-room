@@ -59,6 +59,8 @@ test("assigns a modular chair to the selected agent", async ({ page }) => {
   await expect(chair.locator("option")).toHaveCount(2);
   await chair.selectOption({ index: 1 });
   await expect(chair).not.toHaveValue("");
+  await page.getByRole("button", { name: /Bebedouro/ }).click();
+  await expect(page.getByRole("button", { name: /Bebedouro.*1 na sala/ })).toBeVisible();
 });
 
 test("builds a grouped workstation for the selected agent", async ({ page }) => {
