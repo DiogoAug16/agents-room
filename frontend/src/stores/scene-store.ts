@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { Agent } from "../types";
+import type { FurnitureInstance } from "../scene/furniture/catalog";
 
 const initialAgents: Agent[] = [
   { id: "ana", name: "Ana", role: "Engenharia", description: "Implementa e revisa serviços.", color: 0x5ca6d8, status: "working", direction: "north", position: { x: 10, y: 23 }, basePosition: { x: 10, y: 23 }, skills: ["fastapi"], skillStates: [{ id: "fastapi", enabled: true }], pluginStates: [], task: "Validando adapter Codex" },
@@ -18,6 +19,14 @@ type SceneStore = {
   setTask: (agentId: string, task: string) => void;
   moveAgent: (agentId: string, x: number, y: number) => void;
   replaceAgents: (agents: Agent[]) => void;
+  furniture: FurnitureInstance[];
+  selectedFurnitureId?: string;
+  addFurniture: (assetId: string, position: FurnitureInstance["position"]) => void;
+  moveFurniture: (id: string, position: FurnitureInstance["position"]) => void;
+  removeFurniture: (id: string) => void;
+  rotateFurniture: (id: string) => void;
+  selectFurniture: (id?: string) => void;
+  replaceFurniture: (items: FurnitureInstance[]) => void;
 };
 
 export const useSceneStore = create<SceneStore>((set) => ({
@@ -38,4 +47,11 @@ export const useSceneStore = create<SceneStore>((set) => ({
   setTask: (agentId, task) => set((state) => ({ agents: state.agents.map((agent) => agent.id === agentId ? { ...agent, task, status: "working" } : agent) })),
   moveAgent: (agentId, x, y) => set((state) => ({ agents: state.agents.map((agent) => agent.id === agentId ? { ...agent, position: { x, y }, basePosition: { x, y } } : agent) })),
   replaceAgents: (agents) => set((state) => ({ agents, selectedId: agents.some((agent) => agent.id === state.selectedId) ? state.selectedId : agents[0]?.id })),
+  furniture: [],
+  addFurniture: (assetId, position) => set((state) => ({ furniture: [...state.furniture, { id: crypto.randomUUID(), assetId, position, orientation: "north_east", createdAt: new Date().toISOString() }] })),
+  moveFurniture: (id, position) => set((state) => ({ furniture: state.furniture.map((item) => item.id === id ? { ...item, position } : item) })),
+  removeFurniture: (id) => set((state) => ({ furniture: state.furniture.filter((item) => item.id !== id), selectedFurnitureId: state.selectedFurnitureId === id ? undefined : state.selectedFurnitureId })),
+  rotateFurniture: (id) => set((state) => ({ furniture: state.furniture.map((item) => item.id !== id ? item : { ...item, orientation: ({ north_east: "north_west", north_west: "south_west", south_west: "south_east", south_east: "north_east" } as const)[item.orientation] }) })),
+  selectFurniture: (selectedFurnitureId) => set({ selectedFurnitureId }),
+  replaceFurniture: (furniture) => set({ furniture, selectedFurnitureId: undefined }),
 }));

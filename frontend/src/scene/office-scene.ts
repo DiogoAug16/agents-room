@@ -10,8 +10,9 @@ import { clearEdgeConnectedBackdrop } from "./alpha-mask";
 import { isValidStationCell } from "./station-layout";
 import { IdleBehaviorController, type IdleBehaviorType } from "./idle-behavior-controller";
 import { NavigationGrid } from "./maps/navigation-grid";
-import { homeSeatForAgent, IDLE_POINTS, MEETING_AREAS, STATIC_SEATS, staticObstacleKeys, WORKSTATION_CELLS, WORKSTATIONS, type SeatAnchor } from "./maps/office-layout";
+import { homeSeatForAgent, IDLE_POINTS, isInsideEmptyRoomFloor, MEETING_AREAS, STATIC_SEATS, staticObstacleKeys, WORKSTATION_CELLS, WORKSTATIONS, type SeatAnchor } from "./maps/office-layout";
 import { SeatRegistry, sameGridPoint, seatApproachWorldPosition, seatedWorldPosition } from "./maps/seats";
+import { furnitureAsset, furnitureCells, type FurnitureInstance } from "./furniture/catalog";
 
 type DrawnAgent = { body: Phaser.GameObjects.Container; station: Phaser.GameObjects.Container; sprite: Phaser.GameObjects.Sprite; status: Phaser.GameObjects.Arc; data: Agent; currentCell: Agent["position"]; seatId?: string; idleToken: number };
 
@@ -25,6 +26,10 @@ export class OfficeScene extends Phaser.Scene {
   private gridGraphics?: Phaser.GameObjects.Graphics;
   private stationPreview?: Phaser.GameObjects.Graphics;
   private stationDrag?: string;
+  private furnitureDrag?: string;
+  private readonly furnitureSprites = new Map<string, Phaser.GameObjects.Sprite>();
+  private furnitureBlocks = new Map<string, string>();
+  private furnitureItems: FurnitureInstance[] = [];
   private stationOrigin?: Agent["position"];
   private readonly navigation = new NavigationGrid();
   private readonly seats = new SeatRegistry();
@@ -41,8 +46,11 @@ export class OfficeScene extends Phaser.Scene {
 
   preload() {
     const assetPath = window.location.protocol === "file:" ? "./" : "/";
-    this.load.image("office", `${assetPath}cenario_completo.png`);
+    this.load.image("office", `${assetPath}cenario_completo_vazio_sprite.png`);
     this.load.image("office-modular", `${assetPath}assets_cenario_2_modular.png`);
+    ["chair.office.black.01", "desk.work.light.01", "sofa.blue.01", "plant.floor.monstera.01"].forEach((id) => {
+      const asset = furnitureAsset(id)!; this.load.image(`furniture-${id}`, `${assetPath}${asset.image}`);
+    });
     [1, 2, 3].forEach((index) => this.load.spritesheet(`agent-${index}`, `${assetPath}personagem_${index}_asset.png`, { frameWidth: 256, frameHeight: 256 }));
   }
 
@@ -60,6 +68,7 @@ export class OfficeScene extends Phaser.Scene {
     this.input.on("pointermove", (pointer: Phaser.Input.Pointer) => {
       if (this.debugEnabled) this.updateDebugPointer(pointer);
       if (this.stationDrag) { this.previewStation(this.stationDrag, pointer); return; }
+      if (this.furnitureDrag) { this.previewFurniture(this.furnitureDrag, pointer); return; }
       if (!this.draggingCamera) return;
       this.cameras.main.scrollX -= (pointer.x - this.lastPointer.x) / this.cameras.main.zoom;
       this.cameras.main.scrollY -= (pointer.y - this.lastPointer.y) / this.cameras.main.zoom;
@@ -67,11 +76,12 @@ export class OfficeScene extends Phaser.Scene {
     });
     this.input.on("pointerup", (pointer: Phaser.Input.Pointer) => {
       if (this.stationDrag) { this.moveToCell(this.stationDrag, pointer); this.stationDrag = undefined; this.stationOrigin = undefined; this.stationPreview?.clear(); }
+      if (this.furnitureDrag) { this.moveFurnitureToCell(this.furnitureDrag, pointer); this.furnitureDrag = undefined; this.stationPreview?.clear(); }
       this.draggingCamera = false;
     });
     sceneEvents.addEventListener("agents", this.sync as EventListener);
     sceneEvents.addEventListener("interaction", this.interact as EventListener);
-    this.sync(new CustomEvent("agents", { detail: { agents: useSceneStore.getState().agents, editMode: useSceneStore.getState().editMode } }));
+    this.sync(new CustomEvent("agents", { detail: { agents: useSceneStore.getState().agents, editMode: useSceneStore.getState().editMode, furniture: useSceneStore.getState().furniture } }));
     this.input.keyboard?.on("keydown-F", () => this.focusSelected());
     this.input.keyboard?.on("keydown-ESC", () => window.dispatchEvent(new Event("agent:deselect")));
     if (import.meta.env.DEV) this.input.keyboard?.on("keydown-N", () => this.toggleNavigationDebug());
@@ -91,11 +101,12 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   private sync = (event: Event) => {
-    const { agents, editMode } = (event as CustomEvent<{ agents: Agent[]; editMode: boolean }>).detail;
+    const { agents, editMode, furniture } = (event as CustomEvent<{ agents: Agent[]; editMode: boolean; furniture: FurnitureInstance[] }>).detail;
     this.editMode = editMode;
     this.gridGraphics?.setVisible(editMode);
     if (!editMode) { this.stationDrag = undefined; this.stationOrigin = undefined; this.stationPreview?.clear(); }
     if (editMode) this.idleController.cancelAll();
+    this.renderFurniture(furniture);
     const currentIds = new Set(agents.map((agent) => agent.id));
     this.agents.forEach((drawn, id) => {
       if (currentIds.has(id)) return;
@@ -136,8 +147,46 @@ export class OfficeScene extends Phaser.Scene {
     drawn.status.setFillStyle(this.statusColor(agent.status));
     this.playVisualState(drawn.sprite, agent);
     const homeSeat = this.homeSeat(agent);
-    if (this.isSeatVisualState(agent.status) && (drawn.seatId === homeSeat.id || (!drawn.seatId && sameGridPoint(drawn.currentCell, agent.position)))) this.attachAgentToSeat(drawn, homeSeat, agent.status === "working");
+    if (this.isSeatVisualState(agent.status) && this.hasFurnitureSeat(agent.position) && (drawn.seatId === homeSeat.id || (!drawn.seatId && sameGridPoint(drawn.currentCell, agent.position)))) this.attachAgentToSeat(drawn, homeSeat, agent.status === "working");
+    else if (this.isSeatVisualState(agent.status) && !this.hasFurnitureSeat(agent.position)) drawn.sprite.stop().setFrame(8);
     else if (!drawn.seatId) { drawn.currentCell = { ...agent.position }; this.tweens.add({ targets: drawn.body, x: screen.x, y: screen.y, duration: 240, ease: "Sine.out" }); }
+  }
+
+  private hasFurnitureSeat(position: Agent["position"]) {
+    const target = gridToScreen(position);
+    return [...this.furnitureSprites.values()].some((sprite) => sprite.x === target.x && sprite.y === target.y);
+  }
+
+  private renderFurniture(items: FurnitureInstance[]) {
+    this.furnitureItems = items;
+    this.furnitureBlocks = furnitureCells(items);
+    this.navigation.setFurniture(this.furnitureBlocks);
+    const ids = new Set(items.map((item) => item.id));
+    this.furnitureSprites.forEach((sprite, id) => { if (!ids.has(id)) { sprite.destroy(); this.furnitureSprites.delete(id); } });
+    items.forEach((item) => {
+      const asset = furnitureAsset(item.assetId); if (!asset) return;
+      const screen = gridToScreen(item.position); let sprite = this.furnitureSprites.get(item.id);
+      if (!sprite) {
+        sprite = this.add.sprite(screen.x, screen.y, `furniture-${asset.id}`).setOrigin(0.5, 0.85).setScale(0.75).setInteractive({ useHandCursor: true });
+        sprite.on("pointerdown", (pointer: Phaser.Input.Pointer) => { pointer.event.stopPropagation(); if (this.editMode) { this.furnitureDrag = item.id; window.dispatchEvent(new CustomEvent("furniture:select", { detail: item.id })); } });
+        this.furnitureSprites.set(item.id, sprite);
+      }
+      sprite.setPosition(screen.x, screen.y).setDepth(screen.y + 2).setAlpha(this.editMode ? 1 : 0.96);
+    });
+  }
+
+  private previewFurniture(id: string, pointer: Phaser.Input.Pointer) {
+    const point = this.cameras.main.getWorldPoint(pointer.x, pointer.y); const cell = screenToGrid(point.x, point.y); const screen = gridToScreen(cell);
+    const sprite = this.furnitureSprites.get(id); if (sprite) sprite.setPosition(screen.x, screen.y).setAlpha(0.58);
+  }
+  private moveFurnitureToCell(id: string, pointer: Phaser.Input.Pointer) {
+    const point = this.cameras.main.getWorldPoint(pointer.x, pointer.y); const cell = screenToGrid(point.x, point.y);
+    const item = this.furnitureItems.find((value) => value.id === id); const asset = item && furnitureAsset(item.assetId);
+    if (!item || !asset || !isInsideGrid(cell)) return;
+    const occupied = furnitureCells(this.furnitureItems.filter((value) => value.id !== id));
+    const cells = asset.footprint.map((offset) => ({ x: cell.x + offset.x, y: cell.y + offset.y }));
+    if (!cells.every(isInsideEmptyRoomFloor) || cells.some((value) => occupied.has(`${value.x},${value.y}`))) { window.dispatchEvent(new Event("furniture:invalid")); return; }
+    window.dispatchEvent(new CustomEvent("furniture:move", { detail: { id, position: cell } }));
   }
 
   private moveToCell(id: string, pointer: Phaser.Input.Pointer) {
@@ -267,6 +316,7 @@ export class OfficeScene extends Phaser.Scene {
 
   private blockedCellsFor(agentId: string) {
     const blocked = new Set<string>();
+    this.furnitureBlocks.forEach((_furnitureId, cell) => blocked.add(cell));
     this.agents.forEach(({ currentCell }, id) => { if (id !== agentId) blocked.add(cellKey(currentCell)); });
     reservedByOthers(this.routeReservations, agentId).forEach((cell) => blocked.add(cell));
     return blocked;

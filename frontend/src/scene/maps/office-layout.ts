@@ -81,13 +81,22 @@ export function homeSeatForAgent(agent: { id: string; basePosition: GridPoint })
 }
 
 export const staticObstacleKeys = new Set(STATIC_OBSTACLES.map(key));
-export function buildNavigationCells(): NavigationCell[] {
+// The empty room is intentionally not a rectangle: this polygon follows the
+// visible indoor floor and excludes the skyline, walls and exterior void.
+export const EMPTY_ROOM_FLOOR: GridPoint[] = [{ x: 1, y: 6 }, { x: 35, y: 7 }, { x: 39, y: 24 }, { x: 20, y: 41 }, { x: 4, y: 39 }];
+export function isInsideEmptyRoomFloor(point: GridPoint) {
+  let inside = false;
+  for (let i = 0, j = EMPTY_ROOM_FLOOR.length - 1; i < EMPTY_ROOM_FLOOR.length; j = i++) {
+    const a = EMPTY_ROOM_FLOOR[i], b = EMPTY_ROOM_FLOOR[j];
+    if ((a.y > point.y) !== (b.y > point.y) && point.x < (b.x - a.x) * (point.y - a.y) / (b.y - a.y) + a.x) inside = !inside;
+  }
+  return inside;
+}
+export function buildNavigationCells(furniture: ReadonlyMap<string, string> = new Map()): NavigationCell[] {
   const cells = new Map<string, NavigationCell>();
-  for (let x = 0; x < GRID_WIDTH; x++) for (let y = 0; y < GRID_HEIGHT; y++) cells.set(`${x},${y}`, { gridX: x, gridY: y, type: "blocked", walkable: false, movementCost: Infinity });
-  WORK_AREA_CELLS.forEach((point) => cells.set(key(point), { gridX: point.x, gridY: point.y, type: "work_area", walkable: true, movementCost: 2, objectId: "workstation-approach" }));
-  CORRIDORS.forEach((area) => area.cells.forEach((point) => cells.set(key(point), { gridX: point.x, gridY: point.y, type: "corridor", walkable: true, movementCost: area.priority === 1 ? 1 : 2, objectId: area.id })));
-  IDLE_POINTS.forEach((point) => cells.set(key(point.gridPosition), { gridX: point.gridPosition.x, gridY: point.gridPosition.y, type: "rest_area", walkable: true, movementCost: 3, objectId: point.id }));
-  WORKSTATIONS.forEach((seat) => cells.set(key(seat.gridPosition), { gridX: seat.gridPosition.x, gridY: seat.gridPosition.y, type: "seat", walkable: false, movementCost: Infinity, objectId: seat.id }));
-  STATIC_SEATS.forEach((seat) => cells.set(key(seat.gridPosition), { gridX: seat.gridPosition.x, gridY: seat.gridPosition.y, type: "seat", walkable: false, movementCost: Infinity, objectId: seat.id }));
+  for (let x = 0; x < GRID_WIDTH; x++) for (let y = 0; y < GRID_HEIGHT; y++) {
+    const point = { x, y }, blockedBy = furniture.get(key(point)); const inside = isInsideEmptyRoomFloor(point);
+    cells.set(key(point), { gridX: x, gridY: y, type: blockedBy || !inside ? "blocked" : "walkable", walkable: inside && !blockedBy, movementCost: inside && !blockedBy ? 1 : Infinity, objectId: blockedBy });
+  }
   return [...cells.values()];
 }

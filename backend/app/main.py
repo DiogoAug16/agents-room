@@ -13,7 +13,7 @@ from .codex_provider import CodexAgentProvider
 from .database import Base, SessionLocal, engine, get_session
 from .events import emit, manager, replay
 from .models import Agent, AgentInteraction, AgentPlugin, AgentSession, AgentSkill, Approval, Plugin, Skill, Task, Workspace, Workstation, now
-from .schemas import AgentCreate, ApprovalDecision, DelegationCreate, InteractionCreate, PluginAssignment, PluginEnabledUpdate, PositionUpdate, SkillAssignment, SkillEnabledUpdate, TaskCreate
+from .schemas import AgentCreate, ApprovalDecision, DelegationCreate, InteractionCreate, OfficeLayoutUpdate, PluginAssignment, PluginEnabledUpdate, PositionUpdate, SkillAssignment, SkillEnabledUpdate, TaskCreate
 from .workspace_metadata import current_git_branch
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -161,6 +161,26 @@ def health() -> dict:
 def get_workspace(session: Session = Depends(get_session)) -> dict:
     workspace = seed(session)
     return {"id": workspace.id, "name": workspace.name, "room": {"width": workspace.room_width, "height": workspace.room_height}, "projectRoot": workspace.project_root, "gitBranch": current_git_branch(workspace.project_root)}
+
+
+@app.get("/workspaces/{workspace_id}/office-layout")
+def get_office_layout(workspace_id: str, session: Session = Depends(get_session)) -> dict:
+    workspace = session.get(Workspace, workspace_id)
+    if not workspace:
+        raise HTTPException(404, "Workspace not found")
+    return workspace.settings.get("office_layout", {"schemaVersion": 1, "furnitureInstances": []})
+
+
+@app.put("/workspaces/{workspace_id}/office-layout")
+async def update_office_layout(workspace_id: str, body: OfficeLayoutUpdate, session: Session = Depends(get_session)) -> dict:
+    workspace = session.get(Workspace, workspace_id)
+    if not workspace:
+        raise HTTPException(404, "Workspace not found")
+    layout = {"schemaVersion": body.schema_version, "furnitureInstances": body.furniture_instances}
+    workspace.settings = {**workspace.settings, "office_layout": layout}
+    session.commit()
+    await emit(session, workspace.id, "workspace.layout.updated", payload=layout)
+    return layout
 
 
 @app.get("/workspaces/{workspace_id}/agents")

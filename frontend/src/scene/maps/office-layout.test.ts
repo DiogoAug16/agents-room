@@ -1,13 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { buildNavigationCells, CORRIDORS, STATIC_SEATS, homeSeatForAgent } from "./office-layout";
+import { buildNavigationCells, isInsideEmptyRoomFloor, STATIC_SEATS, homeSeatForAgent } from "./office-layout";
 
 describe("office layout", () => {
-  it("declares connected corridor cells and unique seat ids", () => {
-    const cells = buildNavigationCells();
-    expect(CORRIDORS.flatMap((area) => area.cells)).toContainEqual({ x: 11, y: 16 });
-    expect(cells.find((cell) => cell.gridX === 11 && cell.gridY === 16)).toMatchObject({ type: "corridor", walkable: true, movementCost: 1 });
+  it("keeps the empty-room floor walkable and the exterior blocked", () => {
+    const cells = buildNavigationCells(new Map([["10,14", "desk-1"]]));
+    expect(isInsideEmptyRoomFloor({ x: 11, y: 16 })).toBe(true);
+    expect(isInsideEmptyRoomFloor({ x: 0, y: 0 })).toBe(false);
+    expect(cells.find((cell) => cell.gridX === 11 && cell.gridY === 16)).toMatchObject({ type: "walkable", walkable: true, movementCost: 1 });
+    expect(cells.find((cell) => cell.gridX === 10 && cell.gridY === 14)).toMatchObject({ type: "blocked", walkable: false, objectId: "desk-1" });
     expect(new Set(STATIC_SEATS.map((seat) => seat.id)).size).toBe(STATIC_SEATS.length);
-    expect(cells.find((cell) => cell.objectId === "S03")).toMatchObject({ type: "seat", walkable: false });
   });
 
   it("binds every agent to its own workstation seat and approach", () => {

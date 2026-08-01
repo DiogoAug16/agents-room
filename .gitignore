@@ -1,7 +1,11 @@
 backend/.venv/
 *.db
 .DS_Store
-assets/
+assets/*
+!assets/office/
+assets/office/*
+!assets/office/manifests/
+!assets/office/manifests/*.json
 __pycache__/
 *.pyc
 *.tsbuildinfo

@@ -3,7 +3,7 @@ import { cellKey } from "../pathfinding";
 import { buildNavigationCells, type NavigationCell } from "./office-layout";
 
 export class NavigationGrid {
-  private readonly cells = new Map(buildNavigationCells().map((cell) => [`${cell.gridX},${cell.gridY}`, { ...cell }]));
+  private cells = new Map(buildNavigationCells().map((cell) => [`${cell.gridX},${cell.gridY}`, { ...cell }]));
   private readonly reservations = new Map<string, { agentId: string; expiresAt: number }>();
   private readonly occupants = new Map<string, string>();
   cellAt(point: GridPoint): NavigationCell | undefined { return this.cells.get(cellKey(point)); }
@@ -18,5 +18,6 @@ export class NavigationGrid {
   vacate(point: GridPoint, agentId: string) { if (this.occupants.get(cellKey(point)) === agentId) this.occupants.delete(cellKey(point)); }
   expire(now = Date.now()) { this.reservations.forEach((value, key) => { if (value.expiresAt <= now) this.reservations.delete(key); }); }
   allCells() { return [...this.cells.values()]; }
+  setFurniture(furniture: ReadonlyMap<string, string>) { this.cells = new Map(buildNavigationCells(furniture).map((cell) => [`${cell.gridX},${cell.gridY}`, { ...cell }])); this.reservations.clear(); }
   reservedCells() { this.expire(); return new Set(this.reservations.keys()); }
 }

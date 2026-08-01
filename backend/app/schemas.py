@@ -20,6 +20,11 @@ class PositionUpdate(BaseModel):
     y: int = Field(ge=0, lt=42)
 
 
+class OfficeLayoutUpdate(BaseModel):
+    schema_version: int = Field(default=1, ge=1, le=100)
+    furniture_instances: list[dict] = Field(default_factory=list, max_length=200)
+
+
 class SkillAssignment(BaseModel):
     skill_id: str
 

@@ -35,6 +35,7 @@ describe("A* pathfinding", () => {
     const path = findNavigationPath({ x: 10, y: 25 }, { x: 11, y: 16 }, navigation, "ana", new Set());
     expect(path?.at(-1)).toEqual({ x: 11, y: 16 });
     expect(path?.every((point) => navigation.cellAt(point)?.walkable)).toBe(true);
+    navigation.setFurniture(new Map([["10,14", "desk-1"]]));
     expect(findNavigationPath({ x: 10, y: 25 }, { x: 10, y: 14 }, navigation, "ana", new Set())).toBeNull();
   });
 });

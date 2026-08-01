@@ -1,4 +1,5 @@
 import type { Agent, Skill, VisualStatus } from "../types";
+import type { FurnitureInstance } from "../scene/furniture/catalog";
 
 const baseUrl = import.meta.env.VITE_BACKEND_URL ?? "http://127.0.0.1:8000";
 const colors = [0x5ca6d8, 0xd18b64, 0x85ba82, 0xa786d4, 0xe0ae59];
@@ -18,6 +19,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export const api = {
   health: () => request<{ status: string; codexAvailable: boolean }>("/health"),
   workspace: () => request<Workspace>("/workspaces/default"),
+  officeLayout: (workspaceId: string) => request<{ schemaVersion: number; furnitureInstances: FurnitureInstance[] }>(`/workspaces/${workspaceId}/office-layout`),
+  saveOfficeLayout: (workspaceId: string, furniture: FurnitureInstance[]) => request(`/workspaces/${workspaceId}/office-layout`, { method: "PUT", body: JSON.stringify({ schema_version: 1, furniture_instances: furniture }) }),
   agents: async (workspaceId: string): Promise<Agent[]> => (await request<ApiAgent[]>(`/workspaces/${workspaceId}/agents`)).map((agent, index) => ({ ...agent, status: agent.visualStatus, color: colors[index % colors.length], skills: agent.skills.map((skill) => skill.id), skillStates: agent.skills, pluginStates: agent.plugins })),
   skills: () => request<Skill[]>("/skills"),
   plugins: () => request<Plugin[]>("/plugins"),

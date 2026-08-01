@@ -8,11 +8,12 @@ export function OfficeCanvas() {
   const parent = useRef<HTMLDivElement>(null);
   const agents = useSceneStore((state) => state.agents);
   const editMode = useSceneStore((state) => state.editMode);
+  const furniture = useSceneStore((state) => state.furniture);
   useEffect(() => {
     if (!parent.current) return;
     const game = new Phaser.Game({ type: Phaser.AUTO, parent: parent.current, width: "100%", height: "100%", backgroundColor: "#17222b", scene: OfficeScene, scale: { mode: Phaser.Scale.RESIZE, autoCenter: Phaser.Scale.CENTER_BOTH } });
     return () => game.destroy(true);
   }, []);
-  useEffect(() => publishSceneAgents(agents, editMode), [agents, editMode]);
+  useEffect(() => publishSceneAgents(agents, editMode, furniture), [agents, editMode, furniture]);
   return <div ref={parent} className="office-canvas" aria-label="Escritório isométrico" />;
 }

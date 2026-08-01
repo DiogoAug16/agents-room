@@ -54,6 +54,14 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(refreshed["basePosition"], {"x": 20, "y": 10})
         self.assertEqual(refreshed["workstation"], moved["workstation"])
 
+    def test_persists_the_modular_office_layout(self) -> None:
+        workspace_id = self.workspace["id"]
+        layout = {"schema_version": 1, "furniture_instances": [{"id": "chair-1", "assetId": "chair.office.black.01", "position": {"x": 10, "y": 20}, "orientation": "north_east", "createdAt": "now"}]}
+        self.assertEqual(self.client.put(f"/workspaces/{workspace_id}/office-layout", json=layout).status_code, 200)
+        saved = self.client.get(f"/workspaces/{workspace_id}/office-layout").json()
+        self.assertEqual(saved["schemaVersion"], 1)
+        self.assertEqual(saved["furnitureInstances"], layout["furniture_instances"])
+
     def test_rejects_two_agents_in_the_same_cell(self) -> None:
         workspace_id = self.workspace["id"]
         agents = self.client.get(f"/workspaces/{workspace_id}/agents").json()

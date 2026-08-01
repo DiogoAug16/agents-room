@@ -8,6 +8,7 @@ import { api, websocketUrl } from "./api/client";
 import { OfficeCanvas } from "./scene/office-canvas";
 import { publishSceneInteraction } from "./scene/scene-events";
 import { useSceneStore } from "./stores/scene-store";
+import { FURNITURE_ASSETS, type FurnitureCategory } from "./scene/furniture/catalog";
 
 const agentSchema = z.object({ name: z.string().trim().min(2, "Informe ao menos 2 caracteres"), role: z.string().trim().min(2, "Informe uma função") });
 type AgentForm = z.infer<typeof agentSchema>;
@@ -49,12 +50,21 @@ export function App() {
   const moveAgent = useSceneStore((state) => state.moveAgent);
   const removeSelected = useSceneStore((state) => state.removeSelected);
   const replaceAgents = useSceneStore((state) => state.replaceAgents);
+  const furniture = useSceneStore((state) => state.furniture);
+  const selectedFurnitureId = useSceneStore((state) => state.selectedFurnitureId);
+  const addFurniture = useSceneStore((state) => state.addFurniture);
+  const moveFurniture = useSceneStore((state) => state.moveFurniture);
+  const removeFurniture = useSceneStore((state) => state.removeFurniture);
+  const rotateFurniture = useSceneStore((state) => state.rotateFurniture);
+  const selectFurniture = useSceneStore((state) => state.selectFurniture);
+  const replaceFurniture = useSceneStore((state) => state.replaceFurniture);
   const queryClient = useQueryClient();
   const workspaceQuery = useQuery({ queryKey: ["workspace"], queryFn: api.workspace, retry: false });
   const agentsQuery = useQuery({ queryKey: ["agents", workspaceQuery.data?.id], queryFn: () => api.agents(workspaceQuery.data!.id), enabled: Boolean(workspaceQuery.data), retry: false });
   const pluginsQuery = useQuery({ queryKey: ["plugins"], queryFn: api.plugins, retry: false });
   const skillsQuery = useQuery({ queryKey: ["skills"], queryFn: api.skills, retry: false });
   const approvalsQuery = useQuery({ queryKey: ["approvals", workspaceQuery.data?.id], queryFn: () => api.approvals(workspaceQuery.data!.id), enabled: Boolean(workspaceQuery.data), retry: false });
+  const officeLayoutQuery = useQuery({ queryKey: ["office-layout", workspaceQuery.data?.id], queryFn: () => api.officeLayout(workspaceQuery.data!.id), enabled: Boolean(workspaceQuery.data), retry: false });
   const [task, setTaskDraft] = useState("");
   const [taskAccess, setTaskAccess] = useState("read_only");
   const [interactionTarget, setInteractionTarget] = useState("");
@@ -64,15 +74,24 @@ export function App() {
   const [lastError, setLastError] = useState<string>();
   const [catalogSearch, setCatalogSearch] = useState("");
   const [catalogCategory, setCatalogCategory] = useState("all");
+  const [furnitureSearch, setFurnitureSearch] = useState("");
+  const [furnitureCategory, setFurnitureCategory] = useState<FurnitureCategory | "all">("all");
   const selected = useMemo(() => agents.find((agent) => agent.id === selectedId), [agents, selectedId]);
   const catalogSkills = skillsQuery.data ?? [];
   const filteredSkills = useMemo(() => catalogSkills.filter((skill) => (catalogCategory === "all" || skill.category === catalogCategory) && `${skill.name} ${skill.description} ${skill.category}`.toLocaleLowerCase().includes(catalogSearch.trim().toLocaleLowerCase())), [catalogCategory, catalogSearch, catalogSkills]);
+  const filteredFurniture = useMemo(() => FURNITURE_ASSETS.filter((asset) => (furnitureCategory === "all" || asset.category === furnitureCategory) && asset.name.toLocaleLowerCase().includes(furnitureSearch.trim().toLocaleLowerCase())), [furnitureCategory, furnitureSearch]);
   const tasksQuery = useQuery({ queryKey: ["tasks", selectedId], queryFn: () => api.tasks(selectedId!), enabled: Boolean(selectedId), retry: false });
   const invalidateAgents = () => workspaceQuery.data && queryClient.invalidateQueries({ queryKey: ["agents", workspaceQuery.data.id] });
   const invalidateTasks = () => { if (selectedId) return queryClient.invalidateQueries({ queryKey: ["tasks", selectedId] }); };
   const reportError = (message: string) => { setLastError(message); setEvents((items) => [message, ...items].slice(0, 10)); };
 
   useEffect(() => { if (agentsQuery.data) replaceAgents(agentsQuery.data); }, [agentsQuery.data, replaceAgents]);
+  useEffect(() => { if (officeLayoutQuery.data) replaceFurniture(officeLayoutQuery.data.furnitureInstances); }, [officeLayoutQuery.data, replaceFurniture]);
+  useEffect(() => {
+    if (!workspaceQuery.data || !officeLayoutQuery.isSuccess) return;
+    const timer = window.setTimeout(() => { void api.saveOfficeLayout(workspaceQuery.data!.id, furniture).catch(() => reportError("Não foi possível salvar o layout da sala.")); }, 350);
+    return () => window.clearTimeout(timer);
+  }, [furniture, officeLayoutQuery.isSuccess, workspaceQuery.data]);
   useEffect(() => {
     if (!workspaceQuery.data) return;
     const socket = new WebSocket(websocketUrl(workspaceQuery.data.id));
@@ -92,9 +111,12 @@ export function App() {
     const onMove = (event: Event) => { const { id, x, y } = (event as CustomEvent<{ id: string; x: number; y: number }>).detail; moveAgent(id, x, y); void api.moveAgent(id, x, y).then(invalidateAgents).catch(() => { void invalidateAgents(); setEvents((items) => ["A estação não pode ser movida para essa célula.", ...items].slice(0, 10)); }); setEvents((items) => [`Estação movida para (${x}, ${y}).`, ...items].slice(0, 10)); };
     const onDeselect = () => select(undefined);
     const onInvalidStation = () => setEvents((items) => ["Célula inválida para a estação.", ...items].slice(0, 10));
-    window.addEventListener("agent:select", onSelect); window.addEventListener("agent:move", onMove); window.addEventListener("agent:deselect", onDeselect); window.addEventListener("station:invalid", onInvalidStation);
-    return () => { window.removeEventListener("agent:select", onSelect); window.removeEventListener("agent:move", onMove); window.removeEventListener("agent:deselect", onDeselect); window.removeEventListener("station:invalid", onInvalidStation); };
-  }, [moveAgent, select, workspaceQuery.data, queryClient]);
+    const onFurnitureSelect = (event: Event) => selectFurniture((event as CustomEvent<string>).detail);
+    const onFurnitureMove = (event: Event) => moveFurniture((event as CustomEvent<{ id: string; position: { x: number; y: number } }>).detail.id, (event as CustomEvent<{ id: string; position: { x: number; y: number } }>).detail.position);
+    const onFurnitureInvalid = () => setEvents((items) => ["Móvel fora do piso ou sobre outro objeto.", ...items].slice(0, 10));
+    window.addEventListener("agent:select", onSelect); window.addEventListener("agent:move", onMove); window.addEventListener("agent:deselect", onDeselect); window.addEventListener("station:invalid", onInvalidStation); window.addEventListener("furniture:select", onFurnitureSelect); window.addEventListener("furniture:move", onFurnitureMove); window.addEventListener("furniture:invalid", onFurnitureInvalid);
+    return () => { window.removeEventListener("agent:select", onSelect); window.removeEventListener("agent:move", onMove); window.removeEventListener("agent:deselect", onDeselect); window.removeEventListener("station:invalid", onInvalidStation); window.removeEventListener("furniture:select", onFurnitureSelect); window.removeEventListener("furniture:move", onFurnitureMove); window.removeEventListener("furniture:invalid", onFurnitureInvalid); };
+  }, [moveAgent, moveFurniture, select, selectFurniture, workspaceQuery.data, queryClient]);
   useEffect(() => { (window as Window & { selectedAgentId?: string }).selectedAgentId = selectedId; }, [selectedId]);
   useEffect(() => {
     const started = (event: Event) => void api.startInteraction((event as CustomEvent<{ interactionId: string }>).detail.interactionId);
@@ -162,7 +184,7 @@ export function App() {
   return <DndContext collisionDetection={pointerWithin} onDragEnd={onDragEnd}><main className="app-shell">
     <header className="topbar"><div className="brand"><span className="brand-mark">AR</span><div><strong>Agents Room</strong><small>workspace local</small></div></div><div className="workspace-meta"><span>Projeto: agents-room</span><span>Branch: {workspaceQuery.data?.gitBranch ?? "sem Git"}</span><span className={workspaceQuery.data ? "codex-online" : "codex-offline"}>● {workspaceQuery.data ? "Codex disponível" : "Backend desconectado"}</span><span>{agents.length}/8 agentes</span></div><div className="topbar-actions"><label className="agent-selector"><span>Agente</span><select aria-label="Agente selecionado" value={selectedId ?? ""} onChange={(event) => select(event.target.value || undefined)}><option value="" disabled>Selecionar</option>{agents.map((agent) => <option key={agent.id} value={agent.id}>{agent.name} · {agent.role}</option>)}</select></label><button className={editMode ? "button active" : "button"} onClick={toggleEdit}>{editMode ? "Concluir edição" : "Editar sala"}</button><AddAgentDialog onCreate={createAgent} /></div></header>
     <section className="workspace-grid">
-      <aside className="catalog panel"><div className="panel-heading"><h2>Catálogo</h2><input aria-label="Buscar skills" placeholder="Buscar skill" value={catalogSearch} onChange={(event) => setCatalogSearch(event.target.value)} /></div><select className="catalog-filter" aria-label="Filtrar skills por categoria" value={catalogCategory} onChange={(event) => setCatalogCategory(event.target.value)}><option value="all">Todas as categorias</option>{[...new Set(catalogSkills.map((skill) => skill.category))].map((category) => <option key={category} value={category}>{category}</option>)}</select><p className="section-label">SKILLS LOCAIS</p>{filteredSkills.length ? filteredSkills.map((skill) => <DraggableSkill key={skill.id} skill={skill} disabled={!selected} onAssign={assignSkillToSelected} />) : <div className="empty-plugin">Nenhuma skill encontrada.</div>}<p className="section-label">PLUGINS</p>{pluginsQuery.data?.length ? pluginsQuery.data.map((plugin) => <button key={plugin.id} className="skill-card" onClick={() => assignPlugin(plugin.id)} disabled={!selected}><span>+ {plugin.name}</span><small>{plugin.description} · {plugin.manifest.permissions?.join(", ")}</small></button>) : <div className="empty-plugin">Nenhum plugin disponível.</div>}</aside>
+      <aside className="catalog panel"><div className="panel-heading"><h2>Catálogo</h2><input aria-label="Buscar skills" placeholder="Buscar skill" value={catalogSearch} onChange={(event) => setCatalogSearch(event.target.value)} /></div><select className="catalog-filter" aria-label="Filtrar skills por categoria" value={catalogCategory} onChange={(event) => setCatalogCategory(event.target.value)}><option value="all">Todas as categorias</option>{[...new Set(catalogSkills.map((skill) => skill.category))].map((category) => <option key={category} value={category}>{category}</option>)}</select><p className="section-label">SKILLS LOCAIS</p>{filteredSkills.length ? filteredSkills.map((skill) => <DraggableSkill key={skill.id} skill={skill} disabled={!selected} onAssign={assignSkillToSelected} />) : <div className="empty-plugin">Nenhuma skill encontrada.</div>}<p className="section-label">MÓVEIS</p><input aria-label="Buscar móveis" placeholder="Buscar móvel" value={furnitureSearch} onChange={(event) => setFurnitureSearch(event.target.value)} /><select className="catalog-filter" aria-label="Filtrar móveis por categoria" value={furnitureCategory} onChange={(event) => setFurnitureCategory(event.target.value as FurnitureCategory | "all")}><option value="all">Todas as categorias</option>{[...new Set(FURNITURE_ASSETS.map((asset) => asset.category))].map((category) => <option key={category} value={category}>{category}</option>)}</select>{filteredFurniture.map((asset) => <button key={asset.id} className="skill-card" disabled={!editMode} onClick={() => addFurniture(asset.id, { x: 18, y: 20 })}><span>+ {asset.name}</span><small>{asset.category}{asset.seat ? " · possui assento" : ""} · {furniture.filter((item) => item.assetId === asset.id).length} na sala</small></button>)}{selectedFurnitureId && <div className="furniture-actions"><button className="button" onClick={() => rotateFurniture(selectedFurnitureId)}>Rotacionar</button><button className="button" onClick={() => { const item = furniture.find((value) => value.id === selectedFurnitureId); if (item) addFurniture(item.assetId, { x: item.position.x + 2, y: item.position.y + 2 }); }}>Duplicar</button><button className="danger-link" onClick={() => removeFurniture(selectedFurnitureId)}>Excluir</button></div>}<p className="section-label">PLUGINS</p>{pluginsQuery.data?.length ? pluginsQuery.data.map((plugin) => <button key={plugin.id} className="skill-card" onClick={() => assignPlugin(plugin.id)} disabled={!selected}><span>+ {plugin.name}</span><small>{plugin.description} · {plugin.manifest.permissions?.join(", ")}</small></button>) : <div className="empty-plugin">Nenhum plugin disponível.</div>}</aside>
       <section className="scene-wrap"><div className="scene-toolbar"><span className={editMode ? "mode edit" : "mode"}>{editMode ? "Modo edição: arraste agentes para mover a estação" : "Modo operação"}</span><span>Scroll: zoom · arraste o fundo: câmera · F: foco · Esc: limpar{import.meta.env.DEV ? " · N: mapa" : ""}</span></div><SceneDrop><OfficeCanvas /></SceneDrop></section>
       <aside className="inspector panel"><div className="panel-heading"><h2>Inspector</h2>{selected && <span className={`status-dot ${selected.status}`} aria-label={`Estado: ${selected.status}`} />}</div>{selected ? <><div className="agent-title"><span className="avatar" style={{ background: `#${selected.color.toString(16)}` }}>{selected.name[0]}</span><div><h3>{selected.name}</h3><p>{selected.role}</p></div></div><p className="description">{selected.description}</p><dl className="details"><div><dt>Estado</dt><dd>{selected.status}</dd></div><div><dt>Posição</dt><dd>{selected.position.x}, {selected.position.y}</dd></div><div><dt>Sessão</dt><dd>{selected.sessionId ? `Codex ${selected.sessionId.slice(0, 8)}` : "criada ao iniciar tarefa"}</dd></div></dl><p className="section-label">SKILLS</p><SkillDropZone>{selected.skillStates.length ? selected.skillStates.map(({ id, enabled }) => <span key={id} className={enabled ? "skill-chip" : "skill-chip disabled"}>{catalogSkills.find((skill) => skill.id === id)?.name ?? id}<button onClick={() => updateSkill(id, !enabled)}>{enabled ? "Pausar" : "Ativar"}</button><button onClick={() => removeSkill(id)} aria-label={`Remover ${catalogSkills.find((skill) => skill.id === id)?.name ?? id}`}>×</button></span>) : <span className="empty">Arraste uma skill aqui</span>}</SkillDropZone><p className="section-label">PLUGINS</p><div className="skill-list">{selected.pluginStates.length ? selected.pluginStates.map(({ id, name, enabled }) => <span key={id} className={enabled ? "skill-chip" : "skill-chip disabled"}>{name}<button onClick={() => updatePlugin(id, !enabled)}>{enabled ? "Pausar" : "Ativar"}</button><button onClick={() => removePlugin(id)} aria-label={`Remover ${name}`}>×</button></span>) : <span className="empty">Nenhum plugin atribuído</span>}</div><p className="section-label">ENVIAR TAREFA</p><textarea value={task} onChange={(event) => setTaskDraft(event.target.value)} placeholder="Descreva uma tarefa…" /><button className="primary full" onClick={sendTask}>Enviar ao Codex</button>{selected.task && <p className="task-current">Em execução: {selected.task}</p>}<button className="danger-link" onClick={deleteSelected}>Remover agente</button></> : <div className="empty-inspector">Selecione um agente na sala.</div>}</aside>
     </section>
