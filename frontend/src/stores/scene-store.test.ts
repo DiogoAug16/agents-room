@@ -57,4 +57,17 @@ describe("furniture editor history", () => {
     store.removeFurniture(desk.id);
     expect(useSceneStore.getState().furniture).toEqual([]);
   });
+
+  it("rotates only furniture with a supplied visual variant", () => {
+    const store = useSceneStore.getState();
+    store.addFurniture("desk.work.light.01", { x: 10, y: 20 });
+    const desk = useSceneStore.getState().furniture[0];
+    expect(desk.orientation).toBe("north_west");
+    store.rotateFurniture(desk.id);
+    expect(useSceneStore.getState().furniture[0].orientation).toBe("south_west");
+    store.addFurniture("water.dispenser.01", { x: 12, y: 20 });
+    const water = useSceneStore.getState().furniture[1];
+    store.rotateFurniture(water.id);
+    expect(useSceneStore.getState().furniture[1].orientation).toBe("north_east");
+  });
 });
