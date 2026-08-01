@@ -98,7 +98,7 @@ export class OfficeScene extends Phaser.Scene {
     window.addEventListener("furniture:delete-force", this.deleteFurnitureForce as EventListener);
     window.addEventListener("furniture:focus-group", this.focusFurnitureGroup as EventListener);
     this.sync(new CustomEvent("agents", { detail: { agents: useSceneStore.getState().agents, editMode: useSceneStore.getState().editMode, furniture: useSceneStore.getState().furniture, agentSeatAssignments: useSceneStore.getState().agentSeatAssignments, selectedFurnitureIds: useSceneStore.getState().selectedFurnitureIds, highlightedFurnitureIds: useSceneStore.getState().selectedFurnitureIds, placingFurnitureAssetId: useSceneStore.getState().placingFurnitureAssetId, placingFurnitureOrientation: useSceneStore.getState().placingFurnitureOrientation } }));
-    this.input.keyboard?.on("keydown-F", () => this.focusSelected());
+    this.input.keyboard?.on("keydown-F", () => { if (this.editMode && this.highlightedFurnitureIds.size) { this.focusFurniture(this.highlightedFurnitureIds); return; } this.focusSelected(); });
     this.input.keyboard?.on("keydown-ESC", () => { if (this.placingFurnitureAssetId) window.dispatchEvent(new Event("furniture:cancel-placement")); else window.dispatchEvent(new Event("agent:deselect")); });
     (["LEFT", "RIGHT", "UP", "DOWN"] as const).forEach((key) => this.input.keyboard?.on(`keydown-${key}`, (event: KeyboardEvent) => this.nudgeFurniturePlacement({ LEFT: -1, RIGHT: 1, UP: 0, DOWN: 0 }[key], { LEFT: 0, RIGHT: 0, UP: -1, DOWN: 1 }[key], event.shiftKey ? 3 : 1)));
     if (import.meta.env.DEV) this.input.keyboard?.on("keydown-N", () => this.toggleNavigationDebug());
@@ -379,11 +379,15 @@ export class OfficeScene extends Phaser.Scene {
   };
 
   private focusFurnitureGroup = (event: Event) => {
-    const center = furnitureGroupCenter(this.furnitureItems, (event as CustomEvent<string[]>).detail);
+    this.focusFurniture((event as CustomEvent<string[]>).detail);
+  };
+
+  private focusFurniture(ids: Iterable<string>) {
+    const center = furnitureGroupCenter(this.furnitureItems, ids);
     if (!center) return;
     const point = gridToScreen(center);
     this.cameras.main.pan(point.x, point.y, 250, "Sine.easeInOut");
-  };
+  }
 
   private furnitureScreenPosition(item: FurnitureInstance, delta = { x: 0, y: 0 }) {
     const host = item.parentId ? this.furnitureItems.find((candidate) => candidate.id === item.parentId) : undefined;
