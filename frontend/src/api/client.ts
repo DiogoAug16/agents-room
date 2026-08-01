@@ -20,7 +20,7 @@ export const api = {
   health: () => request<{ status: string; codexAvailable: boolean }>("/health"),
   workspace: () => request<Workspace>("/workspaces/default"),
   officeLayout: (workspaceId: string) => request<{ schemaVersion: number; furnitureInstances: FurnitureInstance[]; furnitureGroups: FurnitureGroup[]; agentSeatAssignments: AgentSeatAssignments }>(`/workspaces/${workspaceId}/office-layout`),
-  saveOfficeLayout: (workspaceId: string, furniture: FurnitureInstance[], furnitureGroups: FurnitureGroup[], agentSeatAssignments: AgentSeatAssignments) => request(`/workspaces/${workspaceId}/office-layout`, { method: "PUT", body: JSON.stringify({ schema_version: 3, furniture_instances: furniture, furniture_groups: furnitureGroups, agent_seat_assignments: agentSeatAssignments }) }),
+  saveOfficeLayout: (workspaceId: string, furniture: FurnitureInstance[], furnitureGroups: FurnitureGroup[], agentSeatAssignments: AgentSeatAssignments) => request(`/workspaces/${workspaceId}/office-layout`, { method: "PUT", body: JSON.stringify({ schema_version: 4, furniture_instances: furniture, furniture_groups: furnitureGroups, agent_seat_assignments: agentSeatAssignments }) }),
   agents: async (workspaceId: string): Promise<Agent[]> => (await request<ApiAgent[]>(`/workspaces/${workspaceId}/agents`)).map((agent, index) => ({ ...agent, status: agent.visualStatus, color: colors[index % colors.length], skills: agent.skills.map((skill) => skill.id), skillStates: agent.skills, pluginStates: agent.plugins })),
   skills: () => request<Skill[]>("/skills"),
   plugins: () => request<Plugin[]>("/plugins"),

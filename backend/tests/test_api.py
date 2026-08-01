@@ -56,13 +56,26 @@ class ApiTests(unittest.TestCase):
 
     def test_persists_the_modular_office_layout(self) -> None:
         workspace_id = self.workspace["id"]
-        layout = {"schema_version": 3, "furniture_instances": [{"id": "chair-1", "assetId": "chair.office.black.01", "position": {"x": 10, "y": 20}, "orientation": "north_east", "createdAt": "now"}], "furniture_groups": [{"id": "station-ana", "name": "Estação ana", "instanceIds": ["chair-1"], "groupType": "workstation"}], "agent_seat_assignments": {"ana": "chair-1"}}
+        agents = self.client.get(f"/workspaces/{workspace_id}/agents").json()
+        layout = {"schema_version": 4, "furniture_instances": [{"id": "desk-1", "assetId": "desk.work.light.01", "position": {"x": 10, "y": 18}, "orientation": "north_west", "createdAt": "now", "groupId": "station-ana"}, {"id": "chair-1", "assetId": "chair.office.black.01", "position": {"x": 10, "y": 20}, "orientation": "north_east", "createdAt": "now", "groupId": "station-ana"}, {"id": "monitor-1", "assetId": "monitor.black.01", "position": {"x": 10, "y": 18}, "orientation": "north_east", "createdAt": "now", "groupId": "station-ana", "parentId": "desk-1", "surfaceOffset": {"x": 8, "y": -28}}], "furniture_groups": [{"id": "station-ana", "name": "Estação ana", "instanceIds": ["desk-1", "chair-1", "monitor-1"], "groupType": "workstation"}], "agent_seat_assignments": {agents[0]["id"]: "chair-1"}}
         self.assertEqual(self.client.put(f"/workspaces/{workspace_id}/office-layout", json=layout).status_code, 200)
         saved = self.client.get(f"/workspaces/{workspace_id}/office-layout").json()
-        self.assertEqual(saved["schemaVersion"], 3)
+        self.assertEqual(saved["schemaVersion"], 4)
         self.assertEqual(saved["furnitureInstances"], layout["furniture_instances"])
         self.assertEqual(saved["furnitureGroups"], layout["furniture_groups"])
         self.assertEqual(saved["agentSeatAssignments"], layout["agent_seat_assignments"])
+
+    def test_rejects_invalid_modular_layout_references(self) -> None:
+        workspace_id = self.workspace["id"]
+        layout = {"schema_version": 4, "furniture_instances": [{"id": "monitor-1", "assetId": "monitor.black.01", "position": {"x": 10, "y": 20}, "orientation": "north_east", "createdAt": "now", "parentId": "missing", "surfaceOffset": {"x": 0, "y": 0}}], "furniture_groups": [], "agent_seat_assignments": {}}
+        response = self.client.put(f"/workspaces/{workspace_id}/office-layout", json=layout)
+        self.assertEqual(response.status_code, 422)
+
+    def test_rejects_non_chair_seat_assignment(self) -> None:
+        workspace_id = self.workspace["id"]
+        agent = self.client.get(f"/workspaces/{workspace_id}/agents").json()[0]
+        layout = {"schema_version": 4, "furniture_instances": [{"id": "sofa-1", "assetId": "sofa.blue.01", "position": {"x": 10, "y": 20}, "orientation": "north_east", "createdAt": "now"}], "furniture_groups": [], "agent_seat_assignments": {agent["id"]: "sofa-1"}}
+        self.assertEqual(self.client.put(f"/workspaces/{workspace_id}/office-layout", json=layout).status_code, 422)
 
     def test_rejects_two_agents_in_the_same_cell(self) -> None:
         workspace_id = self.workspace["id"]
