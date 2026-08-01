@@ -33,6 +33,7 @@ export class OfficeScene extends Phaser.Scene {
   private readonly idleController = new IdleBehaviorController({ canRun: (id) => this.canRunIdle(id), execute: (id, behavior) => this.runIdleBehavior(id, behavior) });
   private debugGraphics?: Phaser.GameObjects.Graphics;
   private debugText?: Phaser.GameObjects.Text;
+  private debugLabels: Phaser.GameObjects.Text[] = [];
   private debugEnabled = false;
   private idleMeetingActive = false;
 
@@ -402,18 +403,26 @@ export class OfficeScene extends Phaser.Scene {
     if (!this.debugGraphics) this.debugGraphics = this.add.graphics().setDepth(99_998);
     if (!this.debugText) this.debugText = this.add.text(8, 8, "", { fontFamily: "JetBrains Mono, monospace", fontSize: "11px", color: "#e8f8fb", backgroundColor: "#142028", padding: { x: 6, y: 4 } }).setScrollFactor(0).setDepth(100_000);
     this.debugGraphics.clear().setVisible(this.debugEnabled); this.debugText.setVisible(this.debugEnabled);
+    this.debugLabels.forEach((label) => label.destroy()); this.debugLabels = [];
     if (!this.debugEnabled) return;
-    const colors = { corridor: 0x4c9eea, walkable: 0x4cae9b, work_area: 0x75c8ae, meeting_area: 0xb48ce8, rest_area: 0xc18ae8, blocked: 0xdf7a7a, seat: 0xaf75dc, interaction_point: 0xe5a744 };
+    const colors = { corridor: 0x36d47b, walkable: 0x36d47b, work_area: 0x36d47b, meeting_area: 0x4c9eea, rest_area: 0x4c9eea, blocked: 0xdf4f4f, seat: 0xb65ee8, interaction_point: 0xe89526 };
     this.navigation.allCells().forEach((cell) => { const point = gridToScreen({ x: cell.gridX, y: cell.gridY }); const color = colors[cell.type]; this.debugGraphics!.fillStyle(color, cell.walkable ? 0.13 : 0.23).fillPoints([new Phaser.Geom.Point(point.x, point.y - TILE_HEIGHT / 2), new Phaser.Geom.Point(point.x + TILE_WIDTH / 2, point.y), new Phaser.Geom.Point(point.x, point.y + TILE_HEIGHT / 2), new Phaser.Geom.Point(point.x - TILE_WIDTH / 2, point.y)], true); });
+    [...WORKSTATIONS, ...STATIC_SEATS].forEach((seat) => {
+      const anchor = gridToScreen(seat.gridPosition); const approach = gridToScreen(seat.approachPosition);
+      const vector = { north: { x: 0, y: -12 }, south: { x: 0, y: 12 }, east: { x: 14, y: 0 }, west: { x: -14, y: 0 } }[seat.facing];
+      this.debugGraphics!.fillStyle(0xb65ee8, 1).fillCircle(anchor.x, anchor.y, 6).fillStyle(0x38dbe5, 1).fillCircle(approach.x, approach.y, 5).lineStyle(2, 0xf0c52e, 1).lineBetween(anchor.x, anchor.y, anchor.x + vector.x, anchor.y + vector.y);
+      this.debugLabels.push(this.add.text(anchor.x + 8, anchor.y - 8, seat.id, { fontFamily: "JetBrains Mono, monospace", fontSize: "10px", color: "#ffffff", stroke: "#142028", strokeThickness: 3 }).setDepth(100_000));
+    });
+    IDLE_POINTS.forEach((point) => { const world = gridToScreen(point.gridPosition); this.debugGraphics!.fillStyle(0xe89526, 1).fillCircle(world.x, world.y, 5); this.debugLabels.push(this.add.text(world.x + 7, world.y + 3, point.id, { fontFamily: "JetBrains Mono, monospace", fontSize: "9px", color: "#ffffff", stroke: "#142028", strokeThickness: 3 }).setDepth(100_000)); });
     this.agents.forEach((agent) => {
       const seat = this.homeSeat(agent.data); const point = gridToScreen(seat.approachPosition);
       this.debugGraphics!.fillStyle(0x6ee9ef, 0.9).fillCircle(point.x, point.y, 4).lineStyle(1, 0xffffff, 0.75).strokeRect(agent.body.x - 18, agent.body.y - 34, 36, 38);
     });
-    this.debugText.setText(`N debug · azul corredor · vermelho bloqueado · roxo assento · ciano aproximação\n${[...this.agents.values()].map((agent) => `${agent.data.id}: ${agent.currentCell.x},${agent.currentCell.y} pés ${Math.round(agent.body.x)},${Math.round(agent.body.y)}`).join(" · ")}`);
+    this.debugText.setText(`N debug · verde corredor · vermelho bloqueado · roxo assento · ciano aproximação\n${[...this.agents.values()].map((agent) => `${agent.data.id}: ${agent.currentCell.x},${agent.currentCell.y} pés ${Math.round(agent.body.x)},${Math.round(agent.body.y)}`).join(" · ")}`);
   }
   private updateDebugPointer(pointer: Phaser.Input.Pointer) {
     if (!this.debugText) return; const world = this.cameras.main.getWorldPoint(pointer.x, pointer.y); const grid = screenToGrid(world.x, world.y);
-    this.debugText.setText(`N debug · grid ${grid.x},${grid.y} · screen ${Math.round(world.x)},${Math.round(world.y)}\nazul corredor · vermelho bloqueado · roxo assento · ciano aproximação`);
+    this.debugText.setText(`N debug · grid ${grid.x},${grid.y} · screen ${Math.round(world.x)},${Math.round(world.y)}\nverde corredor · vermelho bloqueado · roxo assento · ciano aproximação`);
   }
 
   private statusColor(status: Agent["status"]) {
