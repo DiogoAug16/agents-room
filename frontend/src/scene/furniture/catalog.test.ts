@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FURNITURE_ASSETS, furnitureCells } from "./catalog";
+import { FURNITURE_ASSETS, furnitureCells, furnitureInteractionPoints } from "./catalog";
 
 describe("furniture catalog", () => {
   it("turns a furniture footprint into blocked grid cells", () => {
@@ -12,5 +12,11 @@ describe("furniture catalog", () => {
 
   it("keeps every floor furniture asset out of the navigation grid", () => {
     expect(FURNITURE_ASSETS.filter((asset) => !asset.surface).every((asset) => asset.footprint.length > 0)).toBe(true);
+  });
+
+  it("transforms interaction points with the furniture instance", () => {
+    expect(furnitureInteractionPoints([{ id: "water-1", assetId: "water.dispenser.01", position: { x: 10, y: 20 }, orientation: "north_east", createdAt: "now" }])).toEqual([
+      expect.objectContaining({ id: "furniture-water-1-water", gridPosition: { x: 10, y: 21 }, actionTypes: ["idle", "get_water"] }),
+    ]);
   });
 });

@@ -12,7 +12,7 @@ import { IdleBehaviorController, type IdleBehaviorType } from "./idle-behavior-c
 import { NavigationGrid } from "./maps/navigation-grid";
 import { homeSeatForAgent, IDLE_POINTS, isInsideEmptyRoomFloor, MEETING_AREAS, STATIC_SEATS, staticObstacleKeys, WORKSTATION_CELLS, WORKSTATIONS, type SeatAnchor } from "./maps/office-layout";
 import { SeatRegistry, sameGridPoint, seatApproachWorldPosition, seatedWorldPosition } from "./maps/seats";
-import { FURNITURE_ASSETS, furnitureAsset, furnitureCells, type AgentSeatAssignments, type FurnitureInstance } from "./furniture/catalog";
+import { FURNITURE_ASSETS, furnitureAsset, furnitureCells, furnitureInteractionPoints, type AgentSeatAssignments, type FurnitureInstance } from "./furniture/catalog";
 
 type DrawnAgent = { body: Phaser.GameObjects.Container; station: Phaser.GameObjects.Container; sprite: Phaser.GameObjects.Sprite; status: Phaser.GameObjects.Arc; data: Agent; currentCell: Agent["position"]; seatId?: string; idleToken: number };
 type FurnitureLayers = { rear: Phaser.GameObjects.Sprite; front?: Phaser.GameObjects.Sprite };
@@ -169,6 +169,8 @@ export class OfficeScene extends Phaser.Scene {
     this.furnitureItems = items;
     this.furnitureBlocks = furnitureCells(items);
     this.navigation.setFurniture(this.furnitureBlocks);
+    const validPoints = new Set([...IDLE_POINTS.map((point) => point.id), ...furnitureInteractionPoints(items).map((point) => point.id)]);
+    this.idlePointOwners.forEach((_agentId, pointId) => { if (!validPoints.has(pointId)) this.idlePointOwners.delete(pointId); });
     const ids = new Set(items.map((item) => item.id));
     this.furnitureSprites.forEach((layers, id) => { if (!ids.has(id)) { layers.rear.destroy(); layers.front?.destroy(); this.furnitureSprites.delete(id); } });
     items.forEach((item) => {
@@ -391,7 +393,7 @@ export class OfficeScene extends Phaser.Scene {
     return Boolean(this.modularHomeSeat(agent.data)) && allowed.includes(agent.data.status) && away < Math.max(1, Math.floor(this.agents.size * 0.4));
   }
   private reserveIdlePoint(agentId: string) {
-    const point = IDLE_POINTS.find((item) => !this.idlePointOwners.has(item.id));
+    const point = [...IDLE_POINTS, ...furnitureInteractionPoints(this.furnitureItems)].find((item) => !this.idlePointOwners.has(item.id) && this.navigation.canEnter(item.gridPosition, agentId, this.blockedCellsFor(agentId)));
     if (point) this.idlePointOwners.set(point.id, agentId);
     return point;
   }
@@ -500,7 +502,7 @@ export class OfficeScene extends Phaser.Scene {
       this.debugGraphics!.fillStyle(0xb65ee8, 1).fillCircle(anchor.x, anchor.y, 6).fillStyle(0x38dbe5, 1).fillCircle(approach.x, approach.y, 5).lineStyle(2, 0xf0c52e, 1).lineBetween(anchor.x, anchor.y, anchor.x + vector.x, anchor.y + vector.y);
       this.debugLabels.push(this.add.text(anchor.x + 8, anchor.y - 8, seat.id, { fontFamily: "JetBrains Mono, monospace", fontSize: "10px", color: "#ffffff", stroke: "#142028", strokeThickness: 3 }).setDepth(100_000));
     });
-    IDLE_POINTS.forEach((point) => { const world = gridToScreen(point.gridPosition); this.debugGraphics!.fillStyle(0xe89526, 1).fillCircle(world.x, world.y, 5); this.debugLabels.push(this.add.text(world.x + 7, world.y + 3, point.id, { fontFamily: "JetBrains Mono, monospace", fontSize: "9px", color: "#ffffff", stroke: "#142028", strokeThickness: 3 }).setDepth(100_000)); });
+    [...IDLE_POINTS, ...furnitureInteractionPoints(this.furnitureItems)].forEach((point) => { const world = gridToScreen(point.gridPosition); this.debugGraphics!.fillStyle(0xe89526, 1).fillCircle(world.x, world.y, 5); this.debugLabels.push(this.add.text(world.x + 7, world.y + 3, point.id, { fontFamily: "JetBrains Mono, monospace", fontSize: "9px", color: "#ffffff", stroke: "#142028", strokeThickness: 3 }).setDepth(100_000)); });
     this.agents.forEach((agent) => {
       const seat = this.homeSeat(agent.data); const point = gridToScreen(seat.approachPosition);
       this.debugGraphics!.fillStyle(0x6ee9ef, 0.9).fillCircle(point.x, point.y, 4).lineStyle(1, 0xffffff, 0.75).strokeRect(agent.body.x - 18, agent.body.y - 34, 36, 38);

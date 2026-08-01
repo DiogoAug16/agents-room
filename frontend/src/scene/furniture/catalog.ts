@@ -5,7 +5,8 @@ export type FurnitureOrientation = "north_east" | "north_west" | "south_east" | 
 export type FurnitureInstance = { id: string; assetId: string; position: GridPoint; orientation: FurnitureOrientation; createdAt: string; groupId?: string; parentId?: string; surfaceOffset?: GridPoint };
 export type AgentSeatAssignments = Record<string, string>;
 export type FurnitureGroup = { id: string; name: string; instanceIds: string[]; groupType: "workstation" };
-export type FurnitureAsset = { id: string; name: string; category: FurnitureCategory; image: string; footprint: GridPoint[]; navigationPadding: number; defaultScale?: number; surface?: { hostCategories: FurnitureCategory[]; offset: GridPoint }; seat?: { anchor: GridPoint; approach: GridPoint; facing: Direction; offset: GridPoint }; frontOcclusionStart?: number; };
+export type FurnitureInteractionPoint = { id: string; furnitureId: string; gridPosition: GridPoint; facing?: Direction; capacity: number; actionTypes: string[] };
+export type FurnitureAsset = { id: string; name: string; category: FurnitureCategory; image: string; footprint: GridPoint[]; navigationPadding: number; defaultScale?: number; surface?: { hostCategories: FurnitureCategory[]; offset: GridPoint }; seat?: { anchor: GridPoint; approach: GridPoint; facing: Direction; offset: GridPoint }; interactionPoints?: Array<{ id: string; offset: GridPoint; facing?: Direction; capacity: number; actionTypes: string[] }>; frontOcclusionStart?: number; };
 
 export const FURNITURE_ASSETS: FurnitureAsset[] = [
   { id: "chair.office.black.01", name: "Cadeira executiva", category: "chair", image: "office/generated/chairs/chair-office-black-01.png", footprint: [{ x: 0, y: 0 }], navigationPadding: 0, seat: { anchor: { x: 0, y: 0 }, approach: { x: 0, y: 1 }, facing: "north", offset: { x: 0, y: -4 } }, frontOcclusionStart: 0.58 },
@@ -16,8 +17,8 @@ export const FURNITURE_ASSETS: FurnitureAsset[] = [
   { id: "plant.desk.monstera.01", name: "Planta de mesa", category: "decoration", image: "office/generated/plants/plant-floor-monstera-01.png", footprint: [], navigationPadding: 0, defaultScale: 0.26, surface: { hostCategories: ["desk"], offset: { x: -18, y: -24 } } },
   { id: "cabinet.light.01", name: "Armário claro", category: "cabinet", image: "office/generated/cabinets/cabinet-light-01.png", footprint: [{ x: 0, y: 0 }], navigationPadding: 1 },
   { id: "shelf.bookcase.01", name: "Estante de livros", category: "shelf", image: "office/generated/shelves/shelf-bookcase-01.png", footprint: [{ x: 0, y: 0 }], navigationPadding: 1 },
-  { id: "whiteboard.diagram.01", name: "Quadro branco", category: "whiteboard", image: "office/generated/whiteboards/whiteboard-diagram-01.png", footprint: [{ x: 0, y: 0 }, { x: 1, y: 0 }], navigationPadding: 1 },
-  { id: "water.dispenser.01", name: "Bebedouro", category: "equipment", image: "office/generated/equipment/water-dispenser-01.png", footprint: [{ x: 0, y: 0 }], navigationPadding: 1 },
+  { id: "whiteboard.diagram.01", name: "Quadro branco", category: "whiteboard", image: "office/generated/whiteboards/whiteboard-diagram-01.png", footprint: [{ x: 0, y: 0 }, { x: 1, y: 0 }], navigationPadding: 1, interactionPoints: [{ id: "presentation", offset: { x: -1, y: 1 }, facing: "north", capacity: 1, actionTypes: ["meeting", "presentation"] }] },
+  { id: "water.dispenser.01", name: "Bebedouro", category: "equipment", image: "office/generated/equipment/water-dispenser-01.png", footprint: [{ x: 0, y: 0 }], navigationPadding: 1, interactionPoints: [{ id: "water", offset: { x: 0, y: 1 }, facing: "north", capacity: 1, actionTypes: ["idle", "get_water"] }] },
 ];
 
 export const furnitureAsset = (id: string) => FURNITURE_ASSETS.find((asset) => asset.id === id);
@@ -25,3 +26,7 @@ export const furnitureCells = (items: FurnitureInstance[]) => new Map(items.flat
   const asset = furnitureAsset(item.assetId); if (!asset) return [];
   return asset.footprint.map((offset) => [`${item.position.x + offset.x},${item.position.y + offset.y}`, item.id] as const);
 }));
+export const furnitureInteractionPoints = (items: FurnitureInstance[]): FurnitureInteractionPoint[] => items.flatMap((item) => {
+  const points = furnitureAsset(item.assetId)?.interactionPoints ?? [];
+  return points.map((point) => ({ id: `furniture-${item.id}-${point.id}`, furnitureId: item.id, gridPosition: { x: item.position.x + point.offset.x, y: item.position.y + point.offset.y }, facing: point.facing, capacity: point.capacity, actionTypes: point.actionTypes }));
+});
