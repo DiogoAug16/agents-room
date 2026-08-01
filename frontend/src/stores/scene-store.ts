@@ -27,6 +27,11 @@ type SceneStore = {
   rotateFurniture: (id: string) => void;
   selectFurniture: (id?: string) => void;
   replaceFurniture: (items: FurnitureInstance[]) => void;
+  clearFurniture: () => void;
+  undoFurniture: () => void;
+  redoFurniture: () => void;
+  furniturePast: FurnitureInstance[][];
+  furnitureFuture: FurnitureInstance[][];
 };
 
 export const useSceneStore = create<SceneStore>((set) => ({
@@ -47,11 +52,14 @@ export const useSceneStore = create<SceneStore>((set) => ({
   setTask: (agentId, task) => set((state) => ({ agents: state.agents.map((agent) => agent.id === agentId ? { ...agent, task, status: "working" } : agent) })),
   moveAgent: (agentId, x, y) => set((state) => ({ agents: state.agents.map((agent) => agent.id === agentId ? { ...agent, position: { x, y }, basePosition: { x, y } } : agent) })),
   replaceAgents: (agents) => set((state) => ({ agents, selectedId: agents.some((agent) => agent.id === state.selectedId) ? state.selectedId : agents[0]?.id })),
-  furniture: [],
-  addFurniture: (assetId, position) => set((state) => ({ furniture: [...state.furniture, { id: crypto.randomUUID(), assetId, position, orientation: "north_east", createdAt: new Date().toISOString() }] })),
-  moveFurniture: (id, position) => set((state) => ({ furniture: state.furniture.map((item) => item.id === id ? { ...item, position } : item) })),
-  removeFurniture: (id) => set((state) => ({ furniture: state.furniture.filter((item) => item.id !== id), selectedFurnitureId: state.selectedFurnitureId === id ? undefined : state.selectedFurnitureId })),
-  rotateFurniture: (id) => set((state) => ({ furniture: state.furniture.map((item) => item.id !== id ? item : { ...item, orientation: ({ north_east: "north_west", north_west: "south_west", south_west: "south_east", south_east: "north_east" } as const)[item.orientation] }) })),
+  furniture: [], furniturePast: [], furnitureFuture: [],
+  addFurniture: (assetId, position) => set((state) => ({ furniture: [...state.furniture, { id: crypto.randomUUID(), assetId, position, orientation: "north_east", createdAt: new Date().toISOString() }], furniturePast: [...state.furniturePast, state.furniture], furnitureFuture: [] })),
+  moveFurniture: (id, position) => set((state) => ({ furniture: state.furniture.map((item) => item.id === id ? { ...item, position } : item), furniturePast: [...state.furniturePast, state.furniture], furnitureFuture: [] })),
+  removeFurniture: (id) => set((state) => ({ furniture: state.furniture.filter((item) => item.id !== id), selectedFurnitureId: state.selectedFurnitureId === id ? undefined : state.selectedFurnitureId, furniturePast: [...state.furniturePast, state.furniture], furnitureFuture: [] })),
+  rotateFurniture: (id) => set((state) => ({ furniture: state.furniture.map((item) => item.id !== id ? item : { ...item, orientation: ({ north_east: "north_west", north_west: "south_west", south_west: "south_east", south_east: "north_east" } as const)[item.orientation] }), furniturePast: [...state.furniturePast, state.furniture], furnitureFuture: [] })),
   selectFurniture: (selectedFurnitureId) => set({ selectedFurnitureId }),
-  replaceFurniture: (furniture) => set({ furniture, selectedFurnitureId: undefined }),
+  replaceFurniture: (furniture) => set({ furniture, selectedFurnitureId: undefined, furniturePast: [], furnitureFuture: [] }),
+  clearFurniture: () => set((state) => ({ furniture: [], selectedFurnitureId: undefined, furniturePast: [...state.furniturePast, state.furniture], furnitureFuture: [] })),
+  undoFurniture: () => set((state) => { const previous = state.furniturePast.at(-1); return previous ? { furniture: previous, furniturePast: state.furniturePast.slice(0, -1), furnitureFuture: [state.furniture, ...state.furnitureFuture] } : state; }),
+  redoFurniture: () => set((state) => { const next = state.furnitureFuture[0]; return next ? { furniture: next, furniturePast: [...state.furniturePast, state.furniture], furnitureFuture: state.furnitureFuture.slice(1) } : state; }),
 }));
