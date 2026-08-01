@@ -38,6 +38,7 @@ export class OfficeScene extends Phaser.Scene {
   private furnitureBlocks = new Map<string, string>();
   private furnitureItems: FurnitureInstance[] = [];
   private agentSeatAssignments: AgentSeatAssignments = {};
+  private selectedFurnitureIds = new Set<string>();
   private stationOrigin?: Agent["position"];
   private readonly navigation = new NavigationGrid();
   private readonly seats = new SeatRegistry();
@@ -93,7 +94,7 @@ export class OfficeScene extends Phaser.Scene {
     window.addEventListener("furniture:duplicate-request", this.duplicateFurnitureRequest as EventListener);
     window.addEventListener("furniture:delete-request", this.deleteFurnitureRequest as EventListener);
     window.addEventListener("furniture:delete-force", this.deleteFurnitureForce as EventListener);
-    this.sync(new CustomEvent("agents", { detail: { agents: useSceneStore.getState().agents, editMode: useSceneStore.getState().editMode, furniture: useSceneStore.getState().furniture, agentSeatAssignments: useSceneStore.getState().agentSeatAssignments, placingFurnitureAssetId: useSceneStore.getState().placingFurnitureAssetId, placingFurnitureOrientation: useSceneStore.getState().placingFurnitureOrientation } }));
+    this.sync(new CustomEvent("agents", { detail: { agents: useSceneStore.getState().agents, editMode: useSceneStore.getState().editMode, furniture: useSceneStore.getState().furniture, agentSeatAssignments: useSceneStore.getState().agentSeatAssignments, selectedFurnitureIds: useSceneStore.getState().selectedFurnitureIds, placingFurnitureAssetId: useSceneStore.getState().placingFurnitureAssetId, placingFurnitureOrientation: useSceneStore.getState().placingFurnitureOrientation } }));
     this.input.keyboard?.on("keydown-F", () => this.focusSelected());
     this.input.keyboard?.on("keydown-ESC", () => { if (this.placingFurnitureAssetId) window.dispatchEvent(new Event("furniture:cancel-placement")); else window.dispatchEvent(new Event("agent:deselect")); });
     (["LEFT", "RIGHT", "UP", "DOWN"] as const).forEach((key) => this.input.keyboard?.on(`keydown-${key}`, (event: KeyboardEvent) => this.nudgeFurniturePlacement({ LEFT: -1, RIGHT: 1, UP: 0, DOWN: 0 }[key], { LEFT: 0, RIGHT: 0, UP: -1, DOWN: 1 }[key], event.shiftKey ? 3 : 1)));
@@ -114,9 +115,10 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   private sync = (event: Event) => {
-    const { agents, editMode, furniture, agentSeatAssignments, placingFurnitureAssetId, placingFurnitureOrientation } = (event as CustomEvent<{ agents: Agent[]; editMode: boolean; furniture: FurnitureInstance[]; agentSeatAssignments: AgentSeatAssignments; placingFurnitureAssetId?: string; placingFurnitureOrientation?: FurnitureOrientation }>).detail;
+    const { agents, editMode, furniture, agentSeatAssignments, selectedFurnitureIds, placingFurnitureAssetId, placingFurnitureOrientation } = (event as CustomEvent<{ agents: Agent[]; editMode: boolean; furniture: FurnitureInstance[]; agentSeatAssignments: AgentSeatAssignments; selectedFurnitureIds: string[]; placingFurnitureAssetId?: string; placingFurnitureOrientation?: FurnitureOrientation }>).detail;
     this.editMode = editMode;
     this.agentSeatAssignments = agentSeatAssignments;
+    this.selectedFurnitureIds = new Set(selectedFurnitureIds);
     this.placingFurnitureAssetId = editMode ? placingFurnitureAssetId : undefined;
     this.placingFurnitureOrientation = editMode ? placingFurnitureOrientation : undefined;
     if (!this.placingFurnitureAssetId) { this.placementCell = undefined; this.furnitureGhost?.destroy(); this.furnitureGhost = undefined; this.stationPreview?.clear(); }
@@ -209,7 +211,7 @@ export class OfficeScene extends Phaser.Scene {
       if (!layers) {
         const origin = furnitureOrigin(asset, item.orientation);
         const rear = this.add.sprite(screen.x, screen.y, texture).setOrigin(origin.x, origin.y).setScale(asset.defaultScale ?? 0.75);
-        if (!item.parentId) rear.setInteractive({ useHandCursor: true }).on("pointerdown", (pointer: Phaser.Input.Pointer) => { pointer.event.stopPropagation(); if (this.editMode) { this.furnitureDrag = item.id; window.dispatchEvent(new CustomEvent("furniture:select", { detail: item.id })); } });
+        if (!item.parentId) rear.setInteractive({ useHandCursor: true }).on("pointerdown", (pointer: Phaser.Input.Pointer) => { pointer.event.stopPropagation(); if (this.editMode) { const source = pointer.event as MouseEvent; const additive = source.ctrlKey || source.metaKey || source.shiftKey; if (!additive) this.furnitureDrag = item.id; window.dispatchEvent(new CustomEvent("furniture:select", { detail: { id: item.id, additive } })); } });
         const frontCropStart = asset.frontOcclusionStart;
         const front = frontCropStart === undefined ? undefined : this.add.sprite(screen.x, screen.y, texture).setOrigin(origin.x, origin.y).setScale(asset.defaultScale ?? 0.75);
         layers = { rear, front }; this.furnitureSprites.set(item.id, layers);
@@ -219,8 +221,9 @@ export class OfficeScene extends Phaser.Scene {
       const origin = furnitureOrigin(asset, item.orientation);
       layers.rear.setOrigin(origin.x, origin.y); layers.front?.setOrigin(origin.x, origin.y);
       this.applyFurnitureLayerCrops(layers, asset, texture);
-      layers.rear.clearTint().setPosition(screen.x, screen.y).setDepth(screen.y + (item.parentId ? 5 : layers.front ? -14 : -4)).setAlpha(this.editMode ? 1 : 0.96);
-      layers.front?.clearTint().setPosition(screen.x, screen.y).setDepth(screen.y + 10).setAlpha(this.editMode ? 1 : 0.96);
+      const selected = this.selectedFurnitureIds.has(item.id);
+      layers.rear.clearTint().setPosition(screen.x, screen.y).setDepth(screen.y + (item.parentId ? 5 : layers.front ? -14 : -4)).setAlpha(this.editMode ? 1 : 0.96); if (selected) layers.rear.setTint(0xc6f2e7);
+      layers.front?.clearTint().setPosition(screen.x, screen.y).setDepth(screen.y + 10).setAlpha(this.editMode ? 1 : 0.96); if (selected) layers.front?.setTint(0xc6f2e7);
     });
   }
 

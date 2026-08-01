@@ -88,6 +88,20 @@ describe("furniture editor history", () => {
     expect(copy.id).not.toBe(source.id);
   });
 
+  it("groups multiple selected furniture instances into one persisted group", () => {
+    const store = useSceneStore.getState();
+    store.addFurniture("chair.office.black.01", { x: 10, y: 20 });
+    store.addFurniture("water.dispenser.01", { x: 14, y: 20 });
+    const [chair, dispenser] = useSceneStore.getState().furniture;
+    store.selectFurniture(chair.id);
+    store.selectFurniture(dispenser.id, true);
+    store.groupSelectedFurniture();
+    const { furniture, furnitureGroups, selectedFurnitureIds } = useSceneStore.getState();
+    expect(selectedFurnitureIds).toEqual([chair.id, dispenser.id]);
+    expect(furnitureGroups[0]).toMatchObject({ groupType: "custom", instanceIds: [chair.id, dispenser.id] });
+    expect(furniture.every((item) => item.groupId === furnitureGroups[0].id)).toBe(true);
+  });
+
   it("rotates only furniture with a supplied visual variant", () => {
     const store = useSceneStore.getState();
     store.addFurniture("desk.work.light.01", { x: 10, y: 20 });

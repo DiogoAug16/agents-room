@@ -77,6 +77,11 @@ class ApiTests(unittest.TestCase):
         layout = {"schema_version": 4, "furniture_instances": [{"id": "sofa-1", "assetId": "sofa.blue.01", "position": {"x": 10, "y": 20}, "orientation": "north_east", "createdAt": "now"}], "furniture_groups": [], "agent_seat_assignments": {agent["id"]: "sofa-1"}}
         self.assertEqual(self.client.put(f"/workspaces/{workspace_id}/office-layout", json=layout).status_code, 422)
 
+    def test_persists_a_custom_furniture_group(self) -> None:
+        workspace_id = self.workspace["id"]
+        layout = {"schema_version": 4, "furniture_instances": [{"id": "plant-1", "assetId": "plant.floor.monstera.01", "position": {"x": 10, "y": 20}, "orientation": "north_east", "createdAt": "now", "groupId": "custom-1"}, {"id": "water-1", "assetId": "water.dispenser.01", "position": {"x": 14, "y": 20}, "orientation": "north_east", "createdAt": "now", "groupId": "custom-1"}], "furniture_groups": [{"id": "custom-1", "name": "Grupo 1", "instanceIds": ["plant-1", "water-1"], "groupType": "custom"}], "agent_seat_assignments": {}}
+        self.assertEqual(self.client.put(f"/workspaces/{workspace_id}/office-layout", json=layout).status_code, 200)
+
     def test_migrates_a_legacy_layout_when_loading(self) -> None:
         workspace_id = self.workspace["id"]
         legacy = {"schemaVersion": 3, "furnitureInstances": [{"id": "chair-1", "assetId": "chair.office.black.01", "position": {"x": 10, "y": 20}, "orientation": "north_east", "createdAt": "now"}], "furnitureGroups": [{"id": "station-1", "name": "Estação", "instanceIds": ["chair-1"], "groupType": "workstation"}], "agentSeatAssignments": {}}

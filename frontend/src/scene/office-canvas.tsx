@@ -10,6 +10,7 @@ export function OfficeCanvas() {
   const editMode = useSceneStore((state) => state.editMode);
   const furniture = useSceneStore((state) => state.furniture);
   const agentSeatAssignments = useSceneStore((state) => state.agentSeatAssignments);
+  const selectedFurnitureIds = useSceneStore((state) => state.selectedFurnitureIds);
   const placingFurnitureAssetId = useSceneStore((state) => state.placingFurnitureAssetId);
   const placingFurnitureOrientation = useSceneStore((state) => state.placingFurnitureOrientation);
   useEffect(() => {
@@ -17,6 +18,6 @@ export function OfficeCanvas() {
     const game = new Phaser.Game({ type: Phaser.AUTO, parent: parent.current, width: "100%", height: "100%", backgroundColor: "#17222b", scene: OfficeScene, scale: { mode: Phaser.Scale.RESIZE, autoCenter: Phaser.Scale.CENTER_BOTH } });
     return () => game.destroy(true);
   }, []);
-  useEffect(() => publishSceneAgents(agents, editMode, furniture, agentSeatAssignments, placingFurnitureAssetId, placingFurnitureOrientation), [agents, editMode, furniture, agentSeatAssignments, placingFurnitureAssetId, placingFurnitureOrientation]);
+  useEffect(() => publishSceneAgents(agents, editMode, furniture, agentSeatAssignments, selectedFurnitureIds, placingFurnitureAssetId, placingFurnitureOrientation), [agents, editMode, furniture, agentSeatAssignments, selectedFurnitureIds, placingFurnitureAssetId, placingFurnitureOrientation]);
   return <div ref={parent} className="office-canvas" aria-label="Escritório isométrico" />;
 }

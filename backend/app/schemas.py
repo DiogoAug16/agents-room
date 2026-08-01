@@ -49,7 +49,7 @@ class FurnitureGroupPayload(BaseModel):
     id: str = Field(min_length=1, max_length=128)
     name: str = Field(min_length=1, max_length=128)
     instance_ids: list[str] = Field(alias="instanceIds", min_length=1, max_length=200)
-    group_type: Literal["workstation", "lounge"] = Field(alias="groupType")
+    group_type: Literal["workstation", "lounge", "custom"] = Field(alias="groupType")
 
 
 class OfficeLayoutUpdate(BaseModel):
