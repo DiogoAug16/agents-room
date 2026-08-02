@@ -24,9 +24,12 @@ Abra `http://127.0.0.1:5173`.
 Para a aplicação desktop, gere o frontend e execute:
 
 ```bash
+python3 scripts/extract-office-assets.py
 cd frontend && npm run build
 cd ../electron && npm install && npm start
 ```
+
+O comando de extração requer ImageMagick e deve ser executado uma vez após clonar ou alterar [office-assets.json](assets/office/manifests/office-assets.json). Os PNGs derivados não são versionados.
 
 Valide o ciclo desktop sem exibir janela:
 
@@ -39,6 +42,7 @@ cd electron && npm run smoke
 ```bash
 cd frontend && npm run build && npm test
 cd frontend && npm run test:e2e
+python3 -m unittest discover -s scripts -p 'test_*.py'
 cd backend && PYTHONPATH=. .venv/bin/python -m unittest discover -s tests -v
 cd backend && PYTHONPATH=. .venv/bin/python evals/delegation_policy_check.py
 cd backend && PYTHONPATH=. RUN_CODEX_EVAL=1 .venv/bin/python evals/codex_provider_smoke.py

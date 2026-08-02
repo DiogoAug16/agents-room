@@ -31,6 +31,11 @@ describe("furniture catalog", () => {
     expect(furnitureSeat(chair, "south_east")).toMatchObject({ approach: { x: -1, y: 0 }, facing: "east", offset: { x: -2, y: -3 } });
   });
 
+  it("registers the expanded modular catalog with independent sofa seats", () => {
+    expect(FURNITURE_ASSETS.map((asset) => asset.id)).toEqual(expect.arrayContaining(["chair.office.blue.01", "sofa.light.01", "plant.floor.palm.01", "shelf.white.01"]));
+    expect(furnitureSeats(FURNITURE_ASSETS.find((asset) => asset.id === "sofa.light.01")!)).toHaveLength(3);
+  });
+
   it("keeps the two sofa seats independent", () => {
     const sofa = FURNITURE_ASSETS.find((asset) => asset.id === "sofa.blue.01")!;
     expect(furnitureSeats(sofa)).toMatchObject([{ id: "left", approach: { x: 0, y: 1 } }, { id: "right", approach: { x: 1, y: 1 } }]);
