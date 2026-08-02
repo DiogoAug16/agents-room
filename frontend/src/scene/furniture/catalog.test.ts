@@ -20,11 +20,12 @@ describe("furniture catalog", () => {
     ]);
   });
 
-  it("registers interaction points for the functional expansion", () => {
+  it("expands interaction capacity into distinct reservable cells", () => {
     const points = furnitureInteractionPoints([{ id: "recycling-1", assetId: "recycling.station.01", position: { x: 10, y: 20 }, orientation: "north_east", createdAt: "now" }, { id: "meeting-1", assetId: "desk.meeting.l.01", position: { x: 20, y: 12 }, orientation: "north_east", createdAt: "now" }]);
     expect(points).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: "furniture-recycling-1-recycle", gridPosition: { x: 10, y: 21 }, actionTypes: ["idle", "recycle"] }),
-      expect.objectContaining({ id: "furniture-meeting-1-meeting", gridPosition: { x: 21, y: 14 }, capacity: 1 }),
+      expect.objectContaining({ id: "furniture-meeting-1-meeting-1", gridPosition: { x: 21, y: 14 }, capacity: 1 }),
+      expect.objectContaining({ id: "furniture-meeting-1-meeting-2", gridPosition: { x: 22, y: 14 }, capacity: 1 }),
     ]));
   });
 
