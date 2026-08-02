@@ -70,6 +70,17 @@ test("assigns a modular chair to the selected agent", async ({ page }) => {
   await expect(page.getByRole("button", { name: /Bebedouro.*1 na sala/ })).toBeVisible();
 });
 
+test("builds a dual-monitor workstation for the selected agent", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Editar sala" }).click();
+  await page.getByRole("button", { name: "Limpar" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Limpar sala" }).click();
+  await page.getByRole("button", { name: "Montar estação dupla" }).click();
+  await expect(page.getByRole("button", { name: /Monitor \+ teclado.*2 na sala/ })).toBeVisible();
+  await expect(page.getByLabel("Membros do grupo").getByText("Monitor + teclado", { exact: true })).toHaveCount(2);
+  await expect(page.getByText("Estação com dois monitores criada para Ana.")).toBeVisible();
+});
+
 test("builds a grouped workstation for the selected agent", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Editar sala" }).click();

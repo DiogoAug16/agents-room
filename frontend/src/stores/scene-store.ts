@@ -5,13 +5,14 @@ import { isInsideEmptyRoomFloor } from "../scene/maps/office-layout";
 
 type LayoutSnapshot = { furniture: FurnitureInstance[]; furnitureGroups: FurnitureGroup[]; agentSeatAssignments: AgentSeatAssignments };
 const snapshot = (state: LayoutSnapshot): LayoutSnapshot => ({ furniture: state.furniture, furnitureGroups: state.furnitureGroups, agentSeatAssignments: state.agentSeatAssignments });
-const workstationPreset = (agentId: string, position: FurnitureInstance["position"], groupId = crypto.randomUUID(), createdAt = new Date().toISOString()) => {
+const workstationPreset = (agentId: string, position: FurnitureInstance["position"], monitorCount: 1 | 2 = 1, groupId = crypto.randomUUID(), createdAt = new Date().toISOString()) => {
   const deskId = crypto.randomUUID(), chairId = crypto.randomUUID();
   const deskPosition = { x: position.x, y: position.y - 2 };
   return { group: { id: groupId, name: `Estação ${agentId}`, instanceIds: [deskId, chairId], groupType: "workstation" as const }, chairId, furniture: [
     { id: deskId, assetId: "desk.work.light.01", position: deskPosition, orientation: defaultFurnitureOrientation("desk.work.light.01"), createdAt, groupId },
     { id: chairId, assetId: "chair.office.black.01", position, orientation: "north_east" as const, createdAt, groupId },
     { id: crypto.randomUUID(), assetId: "monitor.black.01", position: deskPosition, orientation: "north_east" as const, createdAt, groupId, parentId: deskId, surfaceOffset: furnitureAsset("monitor.black.01")!.surface!.offset },
+    ...(monitorCount === 2 ? [{ id: crypto.randomUUID(), assetId: "monitor.black.01", position: deskPosition, orientation: "north_east" as const, createdAt, groupId, parentId: deskId, surfaceOffset: { x: -18, y: -28 } }] : []),
   ] satisfies FurnitureInstance[] };
 };
 
@@ -56,7 +57,7 @@ type SceneStore = {
   renameSelectedFurnitureGroup: (name: string) => boolean;
   replaceOfficeLayout: (items: FurnitureInstance[], groups: FurnitureGroup[], assignments: AgentSeatAssignments) => void;
   assignAgentSeat: (agentId: string, seatInstanceId?: string) => void;
-  createWorkstationPreset: (agentId: string, position: FurnitureInstance["position"]) => boolean;
+  createWorkstationPreset: (agentId: string, position: FurnitureInstance["position"], monitorCount?: 1 | 2) => boolean;
   createLoungePreset: () => boolean;
   createMeetingPreset: () => boolean;
   createBreakAreaPreset: () => boolean;
@@ -192,10 +193,10 @@ export const useSceneStore = create<SceneStore>((set) => ({
     if (seatInstanceId) agentSeatAssignments[agentId] = seatInstanceId; else delete agentSeatAssignments[agentId];
     return { agentSeatAssignments, furniturePast: [...state.furniturePast, snapshot(state)], furnitureFuture: [] };
   }),
-  createWorkstationPreset: (agentId, position) => {
+  createWorkstationPreset: (agentId, position, monitorCount = 1) => {
     let created = false;
     set((state) => {
-      const preset = workstationPreset(agentId, position), additions = preset.furniture;
+      const preset = workstationPreset(agentId, position, monitorCount), additions = preset.furniture;
       const occupied = furnitureCells(state.furniture);
       for (const item of additions) for (const offset of furnitureAsset(item.assetId)!.footprint) {
         const cell = { x: item.position.x + offset.x, y: item.position.y + offset.y };

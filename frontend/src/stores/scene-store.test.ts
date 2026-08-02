@@ -56,6 +56,16 @@ describe("furniture editor history", () => {
     expect(useSceneStore.getState().furniture.map((item) => item.position)).toEqual([{ x: 11, y: 22 }, { x: 11, y: 24 }, { x: 11, y: 22 }]);
   });
 
+  it("creates a workstation with two independent monitors", () => {
+    const store = useSceneStore.getState();
+    expect(store.createWorkstationPreset("ana", { x: 10, y: 23 }, 2)).toBe(true);
+    const { furniture, furnitureGroups } = useSceneStore.getState();
+    const monitors = furniture.filter((item) => item.assetId === "monitor.black.01");
+    expect(monitors).toHaveLength(2);
+    expect(monitors.map((item) => item.surfaceOffset)).toEqual([{ x: 8, y: -28 }, { x: -18, y: -28 }]);
+    expect(furnitureGroups[0].instanceIds).toEqual(furniture.map((item) => item.id));
+  });
+
   it("restores one default workstation for each current agent", () => {
     const store = useSceneStore.getState();
     store.addFurniture("water.dispenser.01", { x: 14, y: 20 });
