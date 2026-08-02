@@ -80,6 +80,10 @@ test("builds a grouped workstation for the selected agent", async ({ page }) => 
   await page.getByLabel("Agente selecionado").selectOption({ label: "Bruno · Qualidade" });
   await page.getByRole("button", { name: "Selecionar Ana · Engenharia" }).click();
   await expect(page.locator(".inspector").getByRole("heading", { name: "Ana" })).toBeVisible();
+  await page.getByLabel("Agente selecionado").selectOption({ label: "Bruno · Qualidade" });
+  await page.locator("canvas").click({ position: { x: 10, y: 10 } });
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".inspector").getByRole("heading", { name: "Ana" })).toBeVisible();
   await page.getByRole("button", { name: "Excluir" }).click();
   const deleteDialog = page.getByRole("dialog");
   await expect(deleteDialog.getByRole("heading", { name: "Remover móvel em uso?" })).toBeVisible();
