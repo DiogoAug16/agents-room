@@ -204,4 +204,12 @@ describe("furniture editor history", () => {
     expect(furniture.map((item) => item.assetId)).toEqual(["sofa.blue.01", "plant.floor.monstera.01"]);
     expect(furnitureGroups[0]).toMatchObject({ groupType: "lounge", instanceIds: furniture.map((item) => item.id) });
   });
+
+  it("creates a meeting area with a table and two independent chairs", () => {
+    const store = useSceneStore.getState();
+    expect(store.createMeetingPreset()).toBe(true);
+    const { furniture, furnitureGroups } = useSceneStore.getState();
+    expect(furniture.map((item) => item.assetId)).toEqual(["desk.meeting.l.01", "chair.office.black.01", "chair.office.blue.01"]);
+    expect(furnitureGroups[0]).toMatchObject({ name: "Área de reunião", groupType: "meeting", instanceIds: furniture.map((item) => item.id) });
+  });
 });

@@ -58,6 +58,7 @@ type SceneStore = {
   assignAgentSeat: (agentId: string, seatInstanceId?: string) => void;
   createWorkstationPreset: (agentId: string, position: FurnitureInstance["position"]) => boolean;
   createLoungePreset: () => boolean;
+  createMeetingPreset: () => boolean;
   clearFurniture: () => void;
   restoreDefaultFurniture: () => boolean;
   undoFurniture: () => void;
@@ -217,6 +218,26 @@ export const useSceneStore = create<SceneStore>((set) => ({
         if (!cells.every(isInsideEmptyRoomFloor) || cells.some((cell) => occupied.has(`${cell.x},${cell.y}`))) continue;
         created = true;
         return { furniture: [...state.furniture, ...additions], furnitureGroups: [...state.furnitureGroups, { id: groupId, name: "Lounge", instanceIds: additions.map((item) => item.id), groupType: "lounge" }], selectedFurnitureId: sofaId, selectedFurnitureIds: [sofaId], furniturePast: [...state.furniturePast, snapshot(state)], furnitureFuture: [] };
+      }
+      return state;
+    });
+    return created;
+  },
+  createMeetingPreset: () => {
+    let created = false;
+    set((state) => {
+      const occupied = furnitureCells(state.furniture);
+      for (const position of [{ x: 14, y: 18 }, { x: 21, y: 16 }, { x: 24, y: 21 }]) {
+        const groupId = crypto.randomUUID(), tableId = crypto.randomUUID(), now = new Date().toISOString();
+        const additions: FurnitureInstance[] = [
+          { id: tableId, assetId: "desk.meeting.l.01", position, orientation: "north_east", createdAt: now, groupId },
+          { id: crypto.randomUUID(), assetId: "chair.office.black.01", position: { x: position.x, y: position.y + 2 }, orientation: "north_east", createdAt: now, groupId },
+          { id: crypto.randomUUID(), assetId: "chair.office.blue.01", position: { x: position.x + 4, y: position.y + 2 }, orientation: "north_east", createdAt: now, groupId },
+        ];
+        const cells = additions.flatMap((item) => furnitureAsset(item.assetId)!.footprint.map((offset) => ({ x: item.position.x + offset.x, y: item.position.y + offset.y })));
+        if (!cells.every(isInsideEmptyRoomFloor) || cells.some((cell) => occupied.has(`${cell.x},${cell.y}`))) continue;
+        created = true;
+        return { furniture: [...state.furniture, ...additions], furnitureGroups: [...state.furnitureGroups, { id: groupId, name: "Área de reunião", instanceIds: additions.map((item) => item.id), groupType: "meeting" }], selectedFurnitureId: tableId, selectedFurnitureIds: [tableId], furniturePast: [...state.furniturePast, snapshot(state)], furnitureFuture: [] };
       }
       return state;
     });

@@ -143,6 +143,18 @@ test("builds a lounge preset with a modular sofa", async ({ page }) => {
   await expect(page.getByRole("button", { name: /Cadeira executiva.*0 na sala/ })).toBeVisible();
 });
 
+test("builds a modular meeting area", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Editar sala" }).click();
+  await page.getByRole("button", { name: "Limpar" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Limpar sala" }).click();
+  await page.getByRole("button", { name: "Montar reunião" }).click();
+  await expect(page.getByRole("button", { name: /Mesa de reunião em L.*1 na sala/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Cadeira executiva.*1 na sala/ })).toBeVisible();
+  await expect(page.getByText("Área de reunião com dois assentos criada.")).toBeVisible();
+  await expect(page.getByLabel("Inspector do grupo")).toContainText("Reunião");
+});
+
 test("opens the development asset calibration editor", async ({ page }) => {
   await page.goto("/dev/asset-editor");
   await expect(page.getByRole("heading", { name: "Cadeira executiva" })).toBeVisible();
