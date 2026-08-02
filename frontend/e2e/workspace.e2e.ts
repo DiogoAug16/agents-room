@@ -206,7 +206,11 @@ test("opens the development asset calibration editor", async ({ page }) => {
   await page.goto("/dev/asset-editor");
   await expect(page.getByRole("heading", { name: "Cadeira executiva" })).toBeVisible();
   await page.getByLabel("Orientação").selectOption("south_east");
-  await expect(page.getByLabel("Direção do assento")).toHaveValue("east");
+  await expect(page.getByLabel("Assento · Direção")).toHaveValue("east");
   await expect(page.getByLabel("Início da oclusão frontal")).toHaveValue("0.58");
   await expect(page.getByRole("button", { name: "Exportar JSON" })).toBeVisible();
+  await page.getByLabel("Asset").selectOption({ label: "Sofá azul" });
+  await expect(page.getByLabel("Assentos do sofá")).toBeVisible();
+  await expect(page.getByLabel("Assento left · Aproximação x")).toHaveValue("0");
+  await expect(page.getByLabel("Assento right · Direção")).toHaveValue("south");
 });
