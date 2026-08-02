@@ -22,6 +22,6 @@ export function OfficeCanvas() {
     const game = new Phaser.Game({ type: Phaser.AUTO, parent: parent.current, width: "100%", height: "100%", backgroundColor: "#17222b", scene: OfficeScene, scale: { mode: Phaser.Scale.RESIZE, autoCenter: Phaser.Scale.CENTER_BOTH } });
     return () => game.destroy(true);
   }, []);
-  useEffect(() => publishSceneAgents(agents, editMode, furniture, agentSeatAssignments, selectedFurnitureIds, highlightedFurnitureIds, placingFurnitureAssetId, placingFurnitureOrientation), [agents, editMode, furniture, agentSeatAssignments, selectedFurnitureIds, highlightedFurnitureIds, placingFurnitureAssetId, placingFurnitureOrientation]);
+  useEffect(() => publishSceneAgents(agents, editMode, furniture, furnitureGroups, agentSeatAssignments, selectedFurnitureIds, highlightedFurnitureIds, placingFurnitureAssetId, placingFurnitureOrientation), [agents, editMode, furniture, furnitureGroups, agentSeatAssignments, selectedFurnitureIds, highlightedFurnitureIds, placingFurnitureAssetId, placingFurnitureOrientation]);
   return <div ref={parent} className="office-canvas" aria-label="Escritório isométrico" />;
 }

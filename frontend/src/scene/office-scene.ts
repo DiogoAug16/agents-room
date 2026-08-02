@@ -13,7 +13,7 @@ import { NavigationGrid } from "./maps/navigation-grid";
 import { preservesNavigationRoutes } from "./maps/connectivity";
 import { homeSeatForAgent, IDLE_POINTS, isInsideEmptyRoomFloor, MEETING_AREAS, STATIC_SEATS, staticObstacleKeys, WORKSTATION_CELLS, WORKSTATIONS, type SeatAnchor } from "./maps/office-layout";
 import { SeatRegistry, sameGridPoint, seatApproachWorldPosition, seatedWorldPosition } from "./maps/seats";
-import { FURNITURE_ASSETS, defaultFurnitureOrientation, duplicatedFurnitureInstances, furnitureAsset, furnitureCells, furnitureGroupCenter, furnitureImage, furnitureInteractionPoints, furnitureNavigationCells, furnitureOrientations, furnitureOrigin, furnitureSeat, furnitureSeats, furnitureTextureKey, linkedFurnitureIds, movedFurnitureInstances, removableFurnitureIds, type AgentSeatAssignments, type FurnitureInstance, type FurnitureOrientation } from "./furniture/catalog";
+import { FURNITURE_ASSETS, defaultFurnitureOrientation, duplicatedFurnitureInstances, furnitureAsset, furnitureCells, furnitureGroupCenter, furnitureImage, furnitureInteractionPoints, furnitureNavigationCells, furnitureOrientations, furnitureOrigin, furnitureSeat, furnitureSeats, furnitureTextureKey, linkedFurnitureIds, movedFurnitureInstances, removableFurnitureIds, type AgentSeatAssignments, type FurnitureGroup, type FurnitureInstance, type FurnitureOrientation } from "./furniture/catalog";
 
 type DrawnAgent = { body: Phaser.GameObjects.Container; station: Phaser.GameObjects.Container; sprite: Phaser.GameObjects.Sprite; status: Phaser.GameObjects.Arc; data: Agent; currentCell: Agent["position"]; seatId?: string; idleToken: number };
 type FurnitureLayers = { rear: Phaser.GameObjects.Sprite; front?: Phaser.GameObjects.Sprite };
@@ -40,6 +40,7 @@ export class OfficeScene extends Phaser.Scene {
   private readonly furnitureSprites = new Map<string, FurnitureLayers>();
   private furnitureBlocks = new Map<string, string>();
   private furnitureItems: FurnitureInstance[] = [];
+  private furnitureGroups: FurnitureGroup[] = [];
   private agentSeatAssignments: AgentSeatAssignments = {};
   private selectedFurnitureIds = new Set<string>();
   private highlightedFurnitureIds = new Set<string>();
@@ -120,9 +121,10 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   private sync = (event: Event) => {
-    const { agents, editMode, furniture, agentSeatAssignments, selectedFurnitureIds, highlightedFurnitureIds = selectedFurnitureIds, placingFurnitureAssetId, placingFurnitureOrientation } = (event as CustomEvent<{ agents: Agent[]; editMode: boolean; furniture: FurnitureInstance[]; agentSeatAssignments: AgentSeatAssignments; selectedFurnitureIds: string[]; highlightedFurnitureIds?: string[]; placingFurnitureAssetId?: string; placingFurnitureOrientation?: FurnitureOrientation }>).detail;
+    const { agents, editMode, furniture, furnitureGroups, agentSeatAssignments, selectedFurnitureIds, highlightedFurnitureIds = selectedFurnitureIds, placingFurnitureAssetId, placingFurnitureOrientation } = (event as CustomEvent<{ agents: Agent[]; editMode: boolean; furniture: FurnitureInstance[]; furnitureGroups: FurnitureGroup[]; agentSeatAssignments: AgentSeatAssignments; selectedFurnitureIds: string[]; highlightedFurnitureIds?: string[]; placingFurnitureAssetId?: string; placingFurnitureOrientation?: FurnitureOrientation }>).detail;
     this.editMode = editMode;
     this.agentSeatAssignments = agentSeatAssignments;
+    this.furnitureGroups = furnitureGroups;
     this.selectedFurnitureIds = new Set(selectedFurnitureIds);
     this.highlightedFurnitureIds = new Set(highlightedFurnitureIds);
     this.placingFurnitureAssetId = editMode ? placingFurnitureAssetId : undefined;
@@ -200,6 +202,15 @@ export class OfficeScene extends Phaser.Scene {
         approachPosition: { x: item.position.x + seat.approach.x, y: item.position.y + seat.approach.y },
         seatedSpriteOffset: seat.offset, facing: seat.facing, workstationId: item.id, depthOffset: -2,
       }));
+    });
+  }
+
+  private modularMeetingSeats(): SeatAnchor[] {
+    const meetingGroups = new Set(this.furnitureGroups.filter((group) => group.groupType === "meeting").map((group) => group.id));
+    return this.furnitureItems.flatMap((item) => {
+      const asset = furnitureAsset(item.assetId), seat = asset && furnitureSeat(asset, item.orientation);
+      if (!item.groupId || !meetingGroups.has(item.groupId) || asset?.category !== "chair" || !seat) return [];
+      return [{ id: `furniture-${item.id}-seat`, type: "meeting_chair" as const, gridPosition: { x: item.position.x + seat.anchor.x, y: item.position.y + seat.anchor.y }, approachPosition: { x: item.position.x + seat.approach.x, y: item.position.y + seat.approach.y }, seatedSpriteOffset: seat.offset, facing: seat.facing, workstationId: item.groupId, depthOffset: -2 }];
     });
   }
 
@@ -477,7 +488,7 @@ export class OfficeScene extends Phaser.Scene {
   private leaveSeatForWalking(agent: DrawnAgent) {
     if (!agent.seatId) return;
     const modularSeat = this.modularHomeSeat(agent.data);
-    const seat = agent.seatId === modularSeat?.id ? modularSeat : [...STATIC_SEATS, ...this.modularSofaSeats()].find((item) => item.id === agent.seatId);
+    const seat = agent.seatId === modularSeat?.id ? modularSeat : [...STATIC_SEATS, ...this.modularSofaSeats(), ...this.modularMeetingSeats()].find((item) => item.id === agent.seatId);
     if (seat) this.detachAgentFromSeat(agent, seat);
   }
   private async returnToWorkstation(agent: DrawnAgent, token?: number) {
@@ -612,7 +623,7 @@ export class OfficeScene extends Phaser.Scene {
     if (token === agent.idleToken) await this.returnToWorkstation(agent, token);
   }
   private async runIdleMeeting(host: DrawnAgent, token: number) {
-    if (this.idleMeetingActive) return; const peer = [...this.agents.values()].find((agent) => agent.data.id !== host.data.id && this.canRunIdle(agent.data.id)); const seats = MEETING_AREAS[0].seatIds.map((id) => STATIC_SEATS.find((seat) => seat.id === id)!).filter((seat) => !this.seats.occupiedBy(seat.id));
+    if (this.idleMeetingActive) return; const peer = [...this.agents.values()].find((agent) => agent.data.id !== host.data.id && this.canRunIdle(agent.data.id)); const seats = [...this.modularMeetingSeats(), ...MEETING_AREAS[0].seatIds.map((id) => STATIC_SEATS.find((seat) => seat.id === id)!)].filter((seat) => !this.seats.occupiedBy(seat.id));
     if (!peer || seats.length < 2 || !this.seats.reserve(seats[0], host.data.id) || !this.seats.reserve(seats[1], peer.data.id)) { this.seats.release(seats[0], host.data.id); return; }
     this.idleMeetingActive = true; this.idleController.cancelBehavior(peer.data.id); this.leaveSeatForWalking(host); this.leaveSeatForWalking(peer);
     try {
@@ -688,7 +699,7 @@ export class OfficeScene extends Phaser.Scene {
     if (!this.debugEnabled) return;
     const colors = { corridor: 0x36d47b, walkable: 0x36d47b, work_area: 0x36d47b, meeting_area: 0x4c9eea, rest_area: 0x4c9eea, blocked: 0xdf4f4f, seat: 0xb65ee8, interaction_point: 0xe89526 };
     this.navigation.allCells().forEach((cell) => { const point = gridToScreen({ x: cell.gridX, y: cell.gridY }); const color = colors[cell.type]; this.debugGraphics!.fillStyle(color, cell.walkable ? 0.13 : 0.23).fillPoints([new Phaser.Geom.Point(point.x, point.y - TILE_HEIGHT / 2), new Phaser.Geom.Point(point.x + TILE_WIDTH / 2, point.y), new Phaser.Geom.Point(point.x, point.y + TILE_HEIGHT / 2), new Phaser.Geom.Point(point.x - TILE_WIDTH / 2, point.y)], true); });
-    [...WORKSTATIONS, ...STATIC_SEATS, ...this.modularSofaSeats()].forEach((seat) => {
+    [...WORKSTATIONS, ...STATIC_SEATS, ...this.modularSofaSeats(), ...this.modularMeetingSeats()].forEach((seat) => {
       const anchor = gridToScreen(seat.gridPosition); const approach = gridToScreen(seat.approachPosition);
       const vector = { north: { x: 0, y: -12 }, south: { x: 0, y: 12 }, east: { x: 14, y: 0 }, west: { x: -14, y: 0 } }[seat.facing];
       this.debugGraphics!.fillStyle(0xb65ee8, 1).fillCircle(anchor.x, anchor.y, 6).fillStyle(0x38dbe5, 1).fillCircle(approach.x, approach.y, 5).lineStyle(2, 0xf0c52e, 1).lineBetween(anchor.x, anchor.y, anchor.x + vector.x, anchor.y + vector.y);
