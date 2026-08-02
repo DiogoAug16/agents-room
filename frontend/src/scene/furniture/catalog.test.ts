@@ -20,6 +20,14 @@ describe("furniture catalog", () => {
     ]);
   });
 
+  it("registers interaction points for the functional expansion", () => {
+    const points = furnitureInteractionPoints([{ id: "recycling-1", assetId: "recycling.station.01", position: { x: 10, y: 20 }, orientation: "north_east", createdAt: "now" }, { id: "meeting-1", assetId: "desk.meeting.l.01", position: { x: 20, y: 12 }, orientation: "north_east", createdAt: "now" }]);
+    expect(points).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: "furniture-recycling-1-recycle", gridPosition: { x: 10, y: 21 }, actionTypes: ["idle", "recycle"] }),
+      expect.objectContaining({ id: "furniture-meeting-1-meeting", gridPosition: { x: 21, y: 14 }, capacity: 1 }),
+    ]));
+  });
+
   it("uses only supplied images for supported orientations", () => {
     const desk = FURNITURE_ASSETS.find((asset) => asset.id === "desk.work.light.01")!;
     expect(furnitureOrientations(desk)).toEqual(["north_west", "south_west"]);
@@ -32,7 +40,7 @@ describe("furniture catalog", () => {
   });
 
   it("registers the expanded modular catalog with independent sofa seats", () => {
-    expect(FURNITURE_ASSETS.map((asset) => asset.id)).toEqual(expect.arrayContaining(["chair.office.blue.01", "sofa.light.01", "plant.floor.palm.01", "shelf.white.01"]));
+    expect(FURNITURE_ASSETS.map((asset) => asset.id)).toEqual(expect.arrayContaining(["chair.office.blue.01", "sofa.light.01", "plant.floor.palm.01", "shelf.white.01", "desk.meeting.l.01", "recycling.station.01"]));
     expect(furnitureSeats(FURNITURE_ASSETS.find((asset) => asset.id === "sofa.light.01")!)).toHaveLength(3);
   });
 
