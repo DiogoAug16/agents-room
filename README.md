@@ -4,6 +4,12 @@ Workspace local-first para visualizar agentes Codex em um escritório isométric
 
 ## Executar localmente
 
+Após clonar ou alterar [office-assets.json](assets/office/manifests/office-assets.json), gere os PNGs do catálogo. O comando requer ImageMagick; os derivados não são versionados.
+
+```bash
+python3 scripts/extract-office-assets.py
+```
+
 Em um terminal:
 
 ```bash
@@ -24,12 +30,9 @@ Abra `http://127.0.0.1:5173`.
 Para a aplicação desktop, gere o frontend e execute:
 
 ```bash
-python3 scripts/extract-office-assets.py
 cd frontend && npm run build
 cd ../electron && npm install && npm start
 ```
-
-O comando de extração requer ImageMagick e deve ser executado uma vez após clonar ou alterar [office-assets.json](assets/office/manifests/office-assets.json). Os PNGs derivados não são versionados.
 
 Valide o ciclo desktop sem exibir janela:
 
