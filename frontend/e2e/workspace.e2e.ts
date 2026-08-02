@@ -166,6 +166,18 @@ test("rotates a glass divider using a supplied orientation", async ({ page }) =>
   await expect(page.getByText("Posicionando Divisória de vidro · south_east: clique no piso · setas ajustam · Shift acelera · R rotaciona · Esc cancela")).toBeVisible();
 });
 
+test("builds a modular break area", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Editar sala" }).click();
+  await page.getByRole("button", { name: "Limpar" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Limpar sala" }).click();
+  await page.getByRole("button", { name: "Montar pausa" }).click();
+  await expect(page.getByRole("button", { name: /Estação de café.*1 na sala/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Bebedouro.*1 na sala/ })).toBeVisible();
+  await expect(page.getByText("Área de pausa com café e água criada.")).toBeVisible();
+  await expect(page.getByLabel("Inspector do grupo")).toContainText("Pausa");
+});
+
 test("opens the development asset calibration editor", async ({ page }) => {
   await page.goto("/dev/asset-editor");
   await expect(page.getByRole("heading", { name: "Cadeira executiva" })).toBeVisible();
