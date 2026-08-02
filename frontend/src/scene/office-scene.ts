@@ -30,6 +30,7 @@ export class OfficeScene extends Phaser.Scene {
   private stationPreview?: Phaser.GameObjects.Graphics;
   private selectionGraphics?: Phaser.GameObjects.Graphics;
   private focusGraphics?: Phaser.GameObjects.Graphics;
+  private focusLabel?: Phaser.GameObjects.Text;
   private stationDrag?: string;
   private furnitureDrag?: string;
   private placingFurnitureAssetId?: string;
@@ -380,22 +381,25 @@ export class OfficeScene extends Phaser.Scene {
   };
 
   private focusFurnitureGroup = (event: Event) => {
-    this.focusFurniture((event as CustomEvent<string[]>).detail);
+    const detail = (event as CustomEvent<string[] | { ids: string[]; label?: string }>).detail;
+    this.focusFurniture(Array.isArray(detail) ? detail : detail.ids, Array.isArray(detail) ? undefined : detail.label);
   };
 
-  private focusFurniture(ids: Iterable<string>) {
+  private focusFurniture(ids: Iterable<string>, label?: string) {
     const focusedIds = [...ids];
     const center = furnitureGroupCenter(this.furnitureItems, focusedIds);
     if (!center) return;
     const point = gridToScreen(center);
     this.cameras.main.pan(point.x, point.y, 250, "Sine.easeInOut");
-    this.showFurnitureFocus(focusedIds);
+    this.showFurnitureFocus(focusedIds, point, label);
   }
 
-  private showFurnitureFocus(ids: string[]) {
+  private showFurnitureFocus(ids: string[], center: Phaser.Math.Vector2 | { x: number; y: number }, label?: string) {
     if (!this.focusGraphics) this.focusGraphics = this.add.graphics().setDepth(99_996);
     const graphics = this.focusGraphics;
-    this.tweens.killTweensOf(graphics);
+    if (!this.focusLabel) this.focusLabel = this.add.text(0, 0, "", { fontFamily: "Inter, sans-serif", fontSize: "15px", color: "#effbf8", backgroundColor: "#172229", padding: { x: 7, y: 4 } }).setOrigin(0.5).setDepth(99_997);
+    const focusLabel = this.focusLabel;
+    this.tweens.killTweensOf([graphics, focusLabel]);
     graphics.clear().setAlpha(1).setVisible(true).fillStyle(0x4cae9b, 0.24).lineStyle(3, 0x9ce5d8, 1);
     const focused = new Set(ids);
     this.furnitureItems.filter((item) => focused.has(item.id)).forEach((item) => furnitureAsset(item.assetId)?.footprint.forEach((offset) => {
@@ -403,7 +407,9 @@ export class OfficeScene extends Phaser.Scene {
       const diamond = [new Phaser.Geom.Point(point.x, point.y - TILE_HEIGHT / 2), new Phaser.Geom.Point(point.x + TILE_WIDTH / 2, point.y), new Phaser.Geom.Point(point.x, point.y + TILE_HEIGHT / 2), new Phaser.Geom.Point(point.x - TILE_WIDTH / 2, point.y), new Phaser.Geom.Point(point.x, point.y - TILE_HEIGHT / 2)];
       graphics.fillPoints(diamond, true).strokePoints(diamond);
     }));
-    this.tweens.add({ targets: graphics, alpha: 0, duration: 850, ease: "Sine.out", onComplete: () => graphics.clear().setAlpha(1).setVisible(false) });
+    const fallbackLabel = [...new Set(this.furnitureItems.filter((item) => ids.includes(item.id)).map((item) => furnitureAsset(item.assetId)?.name).filter((name): name is string => Boolean(name)))];
+    focusLabel.setText(label ?? (fallbackLabel.length === 1 ? fallbackLabel[0] : `${fallbackLabel.length} móveis`)).setPosition(center.x, center.y - 44).setAlpha(1).setVisible(true);
+    this.tweens.add({ targets: [graphics, focusLabel], alpha: 0, duration: 850, ease: "Sine.out", onComplete: () => { graphics.clear().setAlpha(1).setVisible(false); focusLabel.setAlpha(1).setVisible(false); } });
   }
 
   private furnitureScreenPosition(item: FurnitureInstance, delta = { x: 0, y: 0 }) {

@@ -229,15 +229,16 @@ export function App() {
   };
   const focusFurnitureGroup = () => {
     if (!selectedFurnitureGroup) return;
-    window.dispatchEvent(new CustomEvent("furniture:focus-group", { detail: selectedFurnitureGroup.instanceIds }));
+    window.dispatchEvent(new CustomEvent("furniture:focus-group", { detail: { ids: selectedFurnitureGroup.instanceIds, label: selectedFurnitureGroup.name } }));
   };
   const selectAssignedWorkstationAgent = () => {
     if (assignedWorkstationAgent) select(assignedWorkstationAgent.id);
   };
   const focusAssignedWorkstationSeat = () => {
     if (!assignedWorkstationSeat) return;
-    window.dispatchEvent(new CustomEvent("furniture:focus-group", { detail: [assignedWorkstationSeat.id] }));
-    setEvents((items) => [`Cadeira ${furnitureAsset(assignedWorkstationSeat.assetId)?.name ?? "associada"} em foco.`, ...items].slice(0, 10));
+    const name = furnitureAsset(assignedWorkstationSeat.assetId)?.name ?? "associada";
+    window.dispatchEvent(new CustomEvent("furniture:focus-group", { detail: { ids: [assignedWorkstationSeat.id], label: name } }));
+    setEvents((items) => [`Cadeira ${name} em foco.`, ...items].slice(0, 10));
   };
   const applyLayoutAction = () => {
     if (pendingLayoutAction === "clear") { clearFurniture(); setEvents((items) => ["Layout da sala limpo.", ...items].slice(0, 10)); }
