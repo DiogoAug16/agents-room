@@ -155,6 +155,15 @@ test("builds a modular meeting area", async ({ page }) => {
   await expect(page.getByLabel("Inspector do grupo")).toContainText("Reunião");
 });
 
+test("rotates a glass divider using a supplied orientation", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Editar sala" }).click();
+  await page.getByRole("button", { name: /Divisória de vidro/ }).click();
+  await expect(page.getByText("Posicionando Divisória de vidro · north_east: clique no piso · setas ajustam · Shift acelera · R rotaciona · Esc cancela")).toBeVisible();
+  await page.keyboard.press("r");
+  await expect(page.getByText("Posicionando Divisória de vidro · south_east: clique no piso · setas ajustam · Shift acelera · R rotaciona · Esc cancela")).toBeVisible();
+});
+
 test("opens the development asset calibration editor", async ({ page }) => {
   await page.goto("/dev/asset-editor");
   await expect(page.getByRole("heading", { name: "Cadeira executiva" })).toBeVisible();

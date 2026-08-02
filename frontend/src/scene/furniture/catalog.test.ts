@@ -45,6 +45,9 @@ describe("furniture catalog", () => {
     const desk = FURNITURE_ASSETS.find((asset) => asset.id === "desk.work.light.01")!;
     expect(furnitureOrientations(desk)).toEqual(["north_west", "south_west"]);
     expect(furnitureImage(desk, "south_west")).toContain("desk-work-light-sw-01.png");
+    const divider = FURNITURE_ASSETS.find((asset) => asset.id === "divider.glass.01")!;
+    expect(furnitureOrientations(divider)).toEqual(["north_east", "south_east"]);
+    expect(furnitureImage(divider, "south_east")).toContain("divider-glass-se-01.png");
   });
 
   it("calibrates chair seats by the selected orientation", () => {
