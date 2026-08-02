@@ -6,6 +6,10 @@ describe("furniture catalog", () => {
     expect([...furnitureCells([{ id: "desk-1", assetId: "desk.work.light.01", position: { x: 10, y: 10 }, orientation: "north_east", createdAt: "now" }]).keys()]).toEqual(["10,10", "11,10", "10,11", "11,11"]);
   });
 
+  it("blocks corridor cells for modular dividers", () => {
+    expect([...furnitureCells([{ id: "divider-1", assetId: "divider.glass.01", position: { x: 10, y: 20 }, orientation: "north_east", createdAt: "now" }]).keys()]).toEqual(["10,20", "11,20"]);
+  });
+
   it("defines a front occlusion layer for every usable seat", () => {
     expect(FURNITURE_ASSETS.filter((asset) => furnitureSeats(asset).length).every((asset) => asset.frontOcclusionStart !== undefined)).toBe(true);
   });
@@ -41,7 +45,7 @@ describe("furniture catalog", () => {
   });
 
   it("registers the expanded modular catalog with independent sofa seats", () => {
-    expect(FURNITURE_ASSETS.map((asset) => asset.id)).toEqual(expect.arrayContaining(["chair.office.blue.01", "sofa.light.01", "plant.floor.palm.01", "shelf.white.01", "desk.meeting.l.01", "recycling.station.01"]));
+    expect(FURNITURE_ASSETS.map((asset) => asset.id)).toEqual(expect.arrayContaining(["chair.office.blue.01", "sofa.light.01", "plant.floor.palm.01", "shelf.white.01", "desk.meeting.l.01", "recycling.station.01", "divider.glass.01"]));
     expect(furnitureSeats(FURNITURE_ASSETS.find((asset) => asset.id === "sofa.light.01")!)).toHaveLength(3);
   });
 

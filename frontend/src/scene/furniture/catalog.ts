@@ -1,7 +1,7 @@
 import type { Direction, GridPoint } from "../../types";
 import { GENERATED_FURNITURE_CALIBRATIONS } from "./generated-calibrations";
 
-export type FurnitureCategory = "chair" | "desk" | "monitor" | "sofa" | "plant" | "decoration" | "cabinet" | "shelf" | "whiteboard" | "equipment";
+export type FurnitureCategory = "chair" | "desk" | "monitor" | "sofa" | "plant" | "decoration" | "cabinet" | "shelf" | "whiteboard" | "equipment" | "divider";
 export type FurnitureOrientation = "north_east" | "north_west" | "south_east" | "south_west";
 export type FurnitureInstance = { id: string; assetId: string; position: GridPoint; orientation: FurnitureOrientation; createdAt: string; groupId?: string; parentId?: string; surfaceOffset?: GridPoint };
 export type AgentSeatAssignments = Record<string, string>;
@@ -30,6 +30,7 @@ const BASE_FURNITURE_ASSETS: FurnitureAsset[] = [
   { id: "whiteboard.diagram.01", name: "Quadro branco", category: "whiteboard", image: "office/generated/whiteboards/whiteboard-diagram-01.png", footprint: [{ x: 0, y: 0 }, { x: 1, y: 0 }], navigationPadding: 1, interactionPoints: [{ id: "presentation", offset: { x: -1, y: 1 }, facing: "north", capacity: 1, actionTypes: ["meeting", "presentation"] }] },
   { id: "water.dispenser.01", name: "Bebedouro", category: "equipment", image: "office/generated/equipment/water-dispenser-01.png", footprint: [{ x: 0, y: 0 }], navigationPadding: 1, interactionPoints: [{ id: "water", offset: { x: 0, y: 1 }, facing: "north", capacity: 1, actionTypes: ["idle", "get_water"] }] },
   { id: "recycling.station.01", name: "Estação de reciclagem", category: "equipment", image: "office/generated/equipment/recycling-station-01.png", footprint: [{ x: 0, y: 0 }, { x: 1, y: 0 }], navigationPadding: 1, interactionPoints: [{ id: "recycle", offset: { x: 0, y: 1 }, facing: "north", capacity: 1, actionTypes: ["idle", "recycle"] }] },
+  { id: "divider.glass.01", name: "Divisória de vidro", category: "divider", image: "office/generated/dividers/divider-glass-01.png", footprint: [{ x: 0, y: 0 }, { x: 1, y: 0 }], navigationPadding: 1 },
 ];
 
 const calibrations = GENERATED_FURNITURE_CALIBRATIONS as FurnitureCalibrations;
