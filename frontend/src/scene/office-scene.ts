@@ -13,7 +13,7 @@ import { NavigationGrid } from "./maps/navigation-grid";
 import { preservesNavigationRoutes } from "./maps/connectivity";
 import { homeSeatForAgent, IDLE_POINTS, isInsideEmptyRoomFloor, MEETING_AREAS, STATIC_SEATS, staticObstacleKeys, WORKSTATION_CELLS, WORKSTATIONS, type SeatAnchor } from "./maps/office-layout";
 import { SeatRegistry, sameGridPoint, seatApproachWorldPosition, seatedWorldPosition } from "./maps/seats";
-import { FURNITURE_ASSETS, defaultFurnitureOrientation, duplicatedFurnitureInstances, furnitureAsset, furnitureCells, furnitureGroupCenter, furnitureImage, furnitureInteractionPoints, furnitureNavigationCells, furnitureOrientations, furnitureOrigin, furnitureSeat, furnitureSeats, furnitureTextureKey, linkedFurnitureIds, movedFurnitureInstances, removableFurnitureIds, type AgentSeatAssignments, type FurnitureGroup, type FurnitureInstance, type FurnitureOrientation } from "./furniture/catalog";
+import { FURNITURE_ASSETS, defaultFurnitureOrientation, duplicatedFurnitureInstances, furnitureAsset, furnitureCells, furnitureGroupCenter, furnitureImage, furnitureInteractionPoints, furnitureNavigationCells, furnitureOrientations, furnitureOrigin, furnitureSeat, furnitureSeats, furnitureTextureKey, linkedFurnitureIds, movedFurnitureInstances, removableFurnitureIds, sameFurnitureNavigationCells, type AgentSeatAssignments, type FurnitureGroup, type FurnitureInstance, type FurnitureOrientation } from "./furniture/catalog";
 
 type DrawnAgent = { body: Phaser.GameObjects.Container; station: Phaser.GameObjects.Container; sprite: Phaser.GameObjects.Sprite; status: Phaser.GameObjects.Arc; data: Agent; currentCell: Agent["position"]; seatId?: string; idleToken: number };
 type FurnitureLayers = { rear: Phaser.GameObjects.Sprite; front?: Phaser.GameObjects.Sprite };
@@ -39,6 +39,7 @@ export class OfficeScene extends Phaser.Scene {
   private furnitureGhost?: Phaser.GameObjects.Sprite;
   private readonly furnitureSprites = new Map<string, FurnitureLayers>();
   private furnitureBlocks = new Map<string, string>();
+  private navigationUpdateCount = 0;
   private furnitureItems: FurnitureInstance[] = [];
   private furnitureGroups: FurnitureGroup[] = [];
   private agentSeatAssignments: AgentSeatAssignments = {};
@@ -216,10 +217,14 @@ export class OfficeScene extends Phaser.Scene {
 
   private renderFurniture(items: FurnitureInstance[]) {
     this.furnitureItems = items;
-    this.furnitureBlocks = furnitureNavigationCells(items);
-    this.navigation.setFurniture(this.furnitureBlocks);
-    const validPoints = new Set([...IDLE_POINTS.map((point) => point.id), ...furnitureInteractionPoints(items).map((point) => point.id)]);
-    this.idlePointOwners.forEach((_agentId, pointId) => { if (!validPoints.has(pointId)) this.idlePointOwners.delete(pointId); });
+    const blocks = furnitureNavigationCells(items);
+    if (!sameFurnitureNavigationCells(this.furnitureBlocks, blocks)) {
+      this.furnitureBlocks = blocks;
+      this.navigation.setFurniture(blocks);
+      this.navigationUpdateCount++;
+      const validPoints = new Set([...IDLE_POINTS.map((point) => point.id), ...furnitureInteractionPoints(items).map((point) => point.id)]);
+      this.idlePointOwners.forEach((_agentId, pointId) => { if (!validPoints.has(pointId)) this.idlePointOwners.delete(pointId); });
+    }
     const ids = new Set(items.map((item) => item.id));
     this.furnitureSprites.forEach((layers, id) => { if (!ids.has(id)) { layers.rear.destroy(); layers.front?.destroy(); this.furnitureSprites.delete(id); } });
     items.forEach((item) => {
@@ -710,7 +715,7 @@ export class OfficeScene extends Phaser.Scene {
       const seat = this.homeSeat(agent.data); const point = gridToScreen(seat.approachPosition);
       this.debugGraphics!.fillStyle(0x6ee9ef, 0.9).fillCircle(point.x, point.y, 4).lineStyle(1, 0xffffff, 0.75).strokeRect(agent.body.x - 18, agent.body.y - 34, 36, 38);
     });
-    this.debugText.setText(`N debug · verde corredor · vermelho bloqueado · roxo assento · ciano aproximação\n${[...this.agents.values()].map((agent) => `${agent.data.id}: ${agent.currentCell.x},${agent.currentCell.y} pés ${Math.round(agent.body.x)},${Math.round(agent.body.y)}`).join(" · ")}`);
+    this.debugText.setText(`N debug · navegação atualizada ${this.navigationUpdateCount}x · verde corredor · vermelho bloqueado · roxo assento · ciano aproximação\n${[...this.agents.values()].map((agent) => `${agent.data.id}: ${agent.currentCell.x},${agent.currentCell.y} pés ${Math.round(agent.body.x)},${Math.round(agent.body.y)}`).join(" · ")}`);
   }
   private updateDebugPointer(pointer: Phaser.Input.Pointer) {
     if (!this.debugText) return; const world = this.cameras.main.getWorldPoint(pointer.x, pointer.y); const grid = screenToGrid(world.x, world.y);

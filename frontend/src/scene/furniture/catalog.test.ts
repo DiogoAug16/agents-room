@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FURNITURE_ASSETS, assignedAgentIdForFurnitureGroup, furnitureCells, furnitureGroupCenter, furnitureImage, furnitureInteractionPoints, furnitureNavigationCells, furnitureOrientations, furnitureSeat, furnitureSeats, highlightedFurnitureIds, movedFurnitureInstances, removableFurnitureIds } from "./catalog";
+import { FURNITURE_ASSETS, assignedAgentIdForFurnitureGroup, furnitureCells, furnitureGroupCenter, furnitureImage, furnitureInteractionPoints, furnitureNavigationCells, furnitureOrientations, furnitureSeat, furnitureSeats, highlightedFurnitureIds, movedFurnitureInstances, removableFurnitureIds, sameFurnitureNavigationCells } from "./catalog";
 
 describe("furniture catalog", () => {
   it("turns a furniture footprint into blocked grid cells", () => {
@@ -15,6 +15,11 @@ describe("furniture catalog", () => {
     expect(cells.get("9,19")).toBe("sofa-1:clearance");
     expect(cells.get("10,21")).toBeUndefined();
     expect(cells.get("11,21")).toBeUndefined();
+  });
+
+  it("recognizes an unchanged navigation map regardless of map insertion order", () => {
+    expect(sameFurnitureNavigationCells(new Map([["10,20", "desk"], ["11,20", "desk"]]), new Map([["11,20", "desk"], ["10,20", "desk"]]))).toBe(true);
+    expect(sameFurnitureNavigationCells(new Map([["10,20", "desk"]]), new Map([["10,20", "sofa"]]))).toBe(false);
   });
 
   it("defines a front occlusion layer for every usable seat", () => {

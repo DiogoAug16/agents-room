@@ -126,6 +126,7 @@ export const furnitureNavigationCells = (items: FurnitureInstance[]) => {
   });
   return cells;
 };
+export const sameFurnitureNavigationCells = (current: ReadonlyMap<string, string>, next: ReadonlyMap<string, string>) => current.size === next.size && [...current].every(([cell, furnitureId]) => next.get(cell) === furnitureId);
 export const furnitureGroupCenter = (items: FurnitureInstance[], ids: Iterable<string>): GridPoint | undefined => {
   const selected = new Set(ids);
   const selectedItems = items.filter((item) => selected.has(item.id));
