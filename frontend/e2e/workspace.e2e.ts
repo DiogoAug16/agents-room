@@ -77,6 +77,8 @@ test("builds a grouped workstation for the selected agent", async ({ page }) => 
   const chair = page.getByLabel("Cadeira principal");
   await expect(chair.locator("option")).toHaveCount(2);
   await expect(chair).not.toHaveValue("");
+  await expect(page.getByLabel("Inspector do móvel")).toContainText("Mesa de trabalho");
+  await expect(page.getByLabel("Inspector do móvel")).toContainText("Orientação");
   await expect(page.getByLabel("Inspector do grupo").getByText("CADEIRA ASSOCIADA")).toBeVisible();
   await expect(page.getByLabel("Inspector do grupo")).toContainText("Cadeira executiva");
   await page.getByRole("button", { name: "Focar cadeira Cadeira executiva" }).click();
