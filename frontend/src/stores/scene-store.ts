@@ -119,8 +119,9 @@ export const useSceneStore = create<SceneStore>((set) => ({
     set((state) => {
       const asset = furnitureAsset(assetId), host = state.furniture.find((item) => item.id === hostId), hostAsset = host && furnitureAsset(host.assetId);
       if (!asset?.surface || !host || !hostAsset || !asset.surface.hostCategories.includes(hostAsset.category)) return state;
+      const id = crypto.randomUUID(), group = state.furnitureGroups.find((item) => item.id === host.groupId);
       added = true;
-      return { furniture: [...state.furniture, { id: crypto.randomUUID(), assetId, position: { ...host.position }, orientation: "north_east", createdAt: new Date().toISOString(), parentId: host.id, surfaceOffset: asset.surface.offset }], furniturePast: [...state.furniturePast, snapshot(state)], furnitureFuture: [] };
+      return { furniture: [...state.furniture, { id, assetId, position: { ...host.position }, orientation: "north_east", createdAt: new Date().toISOString(), groupId: host.groupId, parentId: host.id, surfaceOffset: asset.surface.offset }], furnitureGroups: group ? state.furnitureGroups.map((item) => item.id === group.id ? { ...item, instanceIds: [...item.instanceIds, id] } : item) : state.furnitureGroups, furniturePast: [...state.furniturePast, snapshot(state)], furnitureFuture: [] };
     });
     return added;
   },

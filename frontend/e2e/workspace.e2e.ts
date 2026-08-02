@@ -87,6 +87,8 @@ test("builds a grouped workstation for the selected agent", async ({ page }) => 
   await expect(page.getByLabel("Membros do grupo")).toContainText("Monitor + teclado");
   await expect(page.getByLabel("Inspector do grupo").getByText("CADEIRA ASSOCIADA")).toBeVisible();
   await expect(page.getByLabel("Inspector do grupo")).toContainText("Cadeira executiva");
+  await page.getByRole("button", { name: /Planta de mesa/ }).click();
+  await expect(page.getByLabel("Membros do grupo")).toContainText("Planta de mesa");
   await page.getByRole("button", { name: "Focar cadeira Cadeira executiva" }).click();
   await expect(page.locator(".event-panel li").filter({ hasText: "Cadeira Cadeira executiva em foco." }).first()).toBeVisible();
   await page.getByLabel("Agente selecionado").selectOption({ label: "Bruno · Qualidade" });
@@ -113,8 +115,7 @@ test("builds a grouped workstation for the selected agent", async ({ page }) => 
   await rotate.click();
   await page.getByRole("button", { name: "Duplicar" }).click();
   await expect(page.getByRole("button", { name: /Mesa de trabalho.*3 na sala/ })).toBeVisible();
-  await page.getByRole("button", { name: /Planta de mesa/ }).click();
-  await expect(page.getByRole("button", { name: /Planta de mesa.*1 na sala/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Planta de mesa.*3 na sala/ })).toBeVisible();
 });
 
 test("builds a lounge preset with a modular sofa", async ({ page }) => {

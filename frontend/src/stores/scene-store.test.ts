@@ -79,6 +79,17 @@ describe("furniture editor history", () => {
     expect(useSceneStore.getState().furniture[1].position).toEqual({ x: 11, y: 21 });
   });
 
+  it("keeps a surface object inside its workstation group", () => {
+    const store = useSceneStore.getState();
+    expect(store.createWorkstationPreset("ana", { x: 10, y: 23 })).toBe(true);
+    const desk = useSceneStore.getState().furniture.find((item) => item.assetId === "desk.work.light.01")!;
+    expect(store.addSurfaceFurniture("plant.desk.monstera.01", desk.id)).toBe(true);
+    const { furniture, furnitureGroups } = useSceneStore.getState();
+    const plant = furniture.find((item) => item.assetId === "plant.desk.monstera.01")!;
+    expect(plant.groupId).toBe(desk.groupId);
+    expect(furnitureGroups[0].instanceIds).toContain(plant.id);
+  });
+
   it("removes attached surface objects with their desk", () => {
     const store = useSceneStore.getState();
     store.addFurniture("desk.work.light.01", { x: 10, y: 20 });
