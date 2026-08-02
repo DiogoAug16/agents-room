@@ -79,6 +79,8 @@ test("builds a grouped workstation for the selected agent", async ({ page }) => 
   await expect(chair).not.toHaveValue("");
   await expect(page.getByLabel("Inspector do grupo").getByText("CADEIRA ASSOCIADA")).toBeVisible();
   await expect(page.getByLabel("Inspector do grupo")).toContainText("Cadeira executiva");
+  await page.getByRole("button", { name: "Focar cadeira Cadeira executiva" }).click();
+  await expect(page.locator(".event-panel li").filter({ hasText: "Cadeira Cadeira executiva em foco." }).first()).toBeVisible();
   await page.getByLabel("Agente selecionado").selectOption({ label: "Bruno · Qualidade" });
   await page.getByRole("button", { name: "Selecionar Ana · Engenharia" }).click();
   await expect(page.locator(".inspector").getByRole("heading", { name: "Ana" })).toBeVisible();
