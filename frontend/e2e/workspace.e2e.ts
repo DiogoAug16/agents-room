@@ -213,4 +213,5 @@ test("opens the development asset calibration editor", async ({ page }) => {
   await expect(page.getByLabel("Assentos do sofá")).toBeVisible();
   await expect(page.getByLabel("Assento left · Aproximação x")).toHaveValue("0");
   await expect(page.getByLabel("Assento right · Direção")).toHaveValue("south");
+  await expect(page.getByLabel("Início da oclusão frontal")).toHaveValue("0.5");
 });

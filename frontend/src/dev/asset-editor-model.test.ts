@@ -15,5 +15,6 @@ describe("asset editor document", () => {
       expect.objectContaining({ id: "center", approach: { x: 1, y: 1 }, facing: "south" }),
       expect.objectContaining({ id: "right", approach: { x: 2, y: 1 }, facing: "south" }),
     ]));
+    expect(assetEditorDocument(sofa, "north_east").frontOcclusionStart).toBe(0.5);
   });
 });
