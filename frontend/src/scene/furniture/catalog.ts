@@ -96,6 +96,23 @@ export const furnitureCells = (items: FurnitureInstance[]) => new Map(items.flat
   const asset = furnitureAsset(item.assetId); if (!asset) return [];
   return asset.footprint.map((offset) => [`${item.position.x + offset.x},${item.position.y + offset.y}`, item.id] as const);
 }));
+export const furnitureNavigationCells = (items: FurnitureInstance[]) => {
+  const cells: Map<string, string> = new Map(furnitureCells(items));
+  items.forEach((item) => {
+    const asset = furnitureAsset(item.assetId); if (!asset?.navigationPadding) return;
+    const approaches = new Set([
+      ...furnitureSeats(asset).map((seat) => `${item.position.x + seat.approach.x},${item.position.y + seat.approach.y}`),
+      ...(asset.interactionPoints ?? []).flatMap((point) => (point.offsets?.length ? point.offsets : [point.offset]).map((offset) => `${item.position.x + offset.x},${item.position.y + offset.y}`)),
+    ]);
+    asset.footprint.forEach((offset) => {
+      for (let x = -asset.navigationPadding; x <= asset.navigationPadding; x++) for (let y = -asset.navigationPadding; y <= asset.navigationPadding; y++) {
+        const cell = `${item.position.x + offset.x + x},${item.position.y + offset.y + y}`;
+        if (!approaches.has(cell) && !cells.has(cell)) cells.set(cell, `${item.id}:clearance`);
+      }
+    });
+  });
+  return cells;
+};
 export const furnitureGroupCenter = (items: FurnitureInstance[], ids: Iterable<string>): GridPoint | undefined => {
   const selected = new Set(ids);
   const selectedItems = items.filter((item) => selected.has(item.id));

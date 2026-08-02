@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FURNITURE_ASSETS, assignedAgentIdForFurnitureGroup, furnitureCells, furnitureGroupCenter, furnitureImage, furnitureInteractionPoints, furnitureOrientations, furnitureSeat, furnitureSeats, highlightedFurnitureIds, movedFurnitureInstances, removableFurnitureIds } from "./catalog";
+import { FURNITURE_ASSETS, assignedAgentIdForFurnitureGroup, furnitureCells, furnitureGroupCenter, furnitureImage, furnitureInteractionPoints, furnitureNavigationCells, furnitureOrientations, furnitureSeat, furnitureSeats, highlightedFurnitureIds, movedFurnitureInstances, removableFurnitureIds } from "./catalog";
 
 describe("furniture catalog", () => {
   it("turns a furniture footprint into blocked grid cells", () => {
@@ -8,6 +8,13 @@ describe("furniture catalog", () => {
 
   it("blocks corridor cells for modular dividers", () => {
     expect([...furnitureCells([{ id: "divider-1", assetId: "divider.glass.01", position: { x: 10, y: 20 }, orientation: "north_east", createdAt: "now" }]).keys()]).toEqual(["10,20", "11,20"]);
+  });
+
+  it("adds clearance around furniture without blocking its approach point", () => {
+    const cells = furnitureNavigationCells([{ id: "sofa-1", assetId: "sofa.blue.01", position: { x: 10, y: 20 }, orientation: "north_east", createdAt: "now" }]);
+    expect(cells.get("9,19")).toBe("sofa-1:clearance");
+    expect(cells.get("10,21")).toBeUndefined();
+    expect(cells.get("11,21")).toBeUndefined();
   });
 
   it("defines a front occlusion layer for every usable seat", () => {
