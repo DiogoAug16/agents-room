@@ -52,7 +52,7 @@ describe("furniture catalog", () => {
   });
 
   it("registers the expanded modular catalog with independent sofa seats", () => {
-    expect(FURNITURE_ASSETS.map((asset) => asset.id)).toEqual(expect.arrayContaining(["chair.office.blue.01", "sofa.light.01", "plant.floor.palm.01", "shelf.white.01", "desk.meeting.l.01", "recycling.station.01", "divider.glass.01"]));
+    expect(FURNITURE_ASSETS.map((asset) => asset.id)).toEqual(expect.arrayContaining(["chair.office.blue.01", "sofa.light.01", "plant.floor.palm.01", "shelf.white.01", "desk.meeting.l.01", "recycling.station.01", "divider.glass.01", "divider.planter.01"]));
     expect(furnitureSeats(FURNITURE_ASSETS.find((asset) => asset.id === "sofa.light.01")!)).toHaveLength(3);
   });
 

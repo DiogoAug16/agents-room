@@ -31,6 +31,7 @@ const BASE_FURNITURE_ASSETS: FurnitureAsset[] = [
   { id: "water.dispenser.01", name: "Bebedouro", category: "equipment", image: "office/generated/equipment/water-dispenser-01.png", footprint: [{ x: 0, y: 0 }], navigationPadding: 1, interactionPoints: [{ id: "water", offset: { x: 0, y: 1 }, facing: "north", capacity: 1, actionTypes: ["idle", "get_water"] }] },
   { id: "recycling.station.01", name: "Estação de reciclagem", category: "equipment", image: "office/generated/equipment/recycling-station-01.png", footprint: [{ x: 0, y: 0 }, { x: 1, y: 0 }], navigationPadding: 1, interactionPoints: [{ id: "recycle", offset: { x: 0, y: 1 }, facing: "north", capacity: 1, actionTypes: ["idle", "recycle"] }] },
   { id: "divider.glass.01", name: "Divisória de vidro", category: "divider", image: "office/generated/dividers/divider-glass-01.png", footprint: [{ x: 0, y: 0 }, { x: 1, y: 0 }], navigationPadding: 1 },
+  { id: "divider.planter.01", name: "Jardineira divisória", category: "divider", image: "office/generated/dividers/divider-planter-01.png", footprint: [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 2, y: 0 }], navigationPadding: 1 },
 ];
 
 const calibrations = GENERATED_FURNITURE_CALIBRATIONS as FurnitureCalibrations;
