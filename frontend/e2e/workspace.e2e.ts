@@ -88,7 +88,7 @@ test("builds a grouped workstation for the selected agent", async ({ page }) => 
   const clearDialog = page.getByRole("dialog");
   await expect(clearDialog.getByRole("heading", { name: "Limpar escritório?" })).toBeVisible();
   await clearDialog.getByRole("button", { name: "Limpar sala" }).click();
-  await page.getByRole("button", { name: "Montar estação" }).click();
+  await page.getByRole("button", { name: "Montar estação", exact: true }).click();
   const chair = page.getByLabel("Cadeira principal");
   await expect(chair.locator("option")).toHaveCount(2);
   await expect(chair).not.toHaveValue("");

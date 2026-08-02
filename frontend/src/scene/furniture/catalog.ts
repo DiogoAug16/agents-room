@@ -93,7 +93,18 @@ export const duplicatedFurnitureInstances = (items: FurnitureInstance[], groups:
   const group = sourceGroup && { ...sourceGroup, id: groupId!, name: `${sourceGroup.name} cópia`, instanceIds: sourceGroup.instanceIds.map((itemId) => clonedIds.get(itemId)!) };
   return { furniture, group, selectedFurnitureId: clonedIds.get(id)! };
 };
-export const removableFurnitureIds = linkedFurnitureIds;
+export const removableFurnitureIds = (items: FurnitureInstance[], id: string) => {
+  const pivot = items.find((item) => item.id === id);
+  if (!pivot) return new Set<string>();
+  if (!pivot.parentId) return linkedFurnitureIds(items, id);
+  const ids = new Set([id]);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    items.filter((item) => item.parentId && ids.has(item.parentId) && !ids.has(item.id)).forEach((item) => { ids.add(item.id); changed = true; });
+  }
+  return ids;
+};
 export const furnitureCells = (items: FurnitureInstance[]) => new Map(items.flatMap((item) => {
   const asset = furnitureAsset(item.assetId); if (!asset) return [];
   return asset.footprint.map((offset) => [`${item.position.x + offset.x},${item.position.y + offset.y}`, item.id] as const);

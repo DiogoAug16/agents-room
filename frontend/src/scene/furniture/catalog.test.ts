@@ -92,4 +92,9 @@ describe("furniture catalog", () => {
     const items = [{ id: "desk", assetId: "desk.work.light.01", position: { x: 10, y: 20 }, orientation: "north_west" as const, createdAt: "now", groupId: "station" }, { id: "chair", assetId: "chair.office.black.01", position: { x: 10, y: 23 }, orientation: "north_east" as const, createdAt: "now", groupId: "station" }, { id: "monitor", assetId: "monitor.black.01", position: { x: 10, y: 20 }, orientation: "north_east" as const, createdAt: "now", groupId: "station", parentId: "desk", surfaceOffset: { x: 8, y: -28 } }];
     expect(removableFurnitureIds(items, "desk")).toEqual(new Set(["desk", "chair", "monitor"]));
   });
+
+  it("removes only a selected surface object instead of its workstation", () => {
+    const items = [{ id: "desk", assetId: "desk.work.light.01", position: { x: 10, y: 20 }, orientation: "north_west" as const, createdAt: "now", groupId: "station" }, { id: "chair", assetId: "chair.office.black.01", position: { x: 10, y: 23 }, orientation: "north_east" as const, createdAt: "now", groupId: "station" }, { id: "monitor", assetId: "monitor.black.01", position: { x: 10, y: 20 }, orientation: "north_east" as const, createdAt: "now", groupId: "station", parentId: "desk", surfaceOffset: { x: 8, y: -28 } }];
+    expect(removableFurnitureIds(items, "monitor")).toEqual(new Set(["monitor"]));
+  });
 });

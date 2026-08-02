@@ -109,6 +109,17 @@ describe("furniture editor history", () => {
     expect(useSceneStore.getState().furniture).toEqual([]);
   });
 
+  it("removes a surface object without removing its workstation", () => {
+    const store = useSceneStore.getState();
+    expect(store.createWorkstationPreset("ana", { x: 10, y: 23 })).toBe(true);
+    const monitor = useSceneStore.getState().furniture.find((item) => item.assetId === "monitor.black.01")!;
+    store.removeFurniture(monitor.id);
+    const { furniture, furnitureGroups, agentSeatAssignments } = useSceneStore.getState();
+    expect(furniture.map((item) => item.assetId)).toEqual(["desk.work.light.01", "chair.office.black.01"]);
+    expect(furnitureGroups[0].instanceIds).toEqual(furniture.map((item) => item.id));
+    expect(agentSeatAssignments.ana).toBe(furniture[1].id);
+  });
+
   it("duplicates a selected furniture item as an independent instance", () => {
     const store = useSceneStore.getState();
     store.addFurniture("chair.office.black.01", { x: 10, y: 20 });
