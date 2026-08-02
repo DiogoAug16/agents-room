@@ -33,7 +33,8 @@ def run() -> None:
         source = ASSETS / asset["source"]
         output = ASSETS / asset["output"]
         output.parent.mkdir(parents=True, exist_ok=True)
-        command = [tool, str(source), "-crop", f"{width}x{height}+{x}+{y}", "+repage", "-alpha", "off", "-bordercolor", "#c3c3c3", "-border", "1", "-fuzz", "20%", "-fill", "none", "-draw", "alpha 0,0 floodfill", "-shave", "1x1", "-trim", "+repage", "-bordercolor", "none", "-border", "4", str(output)]
+        clear_regions = [value for region in asset.get("clearRegions", []) for value in ("-region", f"{region[2]}x{region[3]}+{region[0]}+{region[1]}", "-channel", "A", "-evaluate", "set", "0", "+channel", "+region")]
+        command = [tool, str(source), "-crop", f"{width}x{height}+{x}+{y}", "+repage", "-alpha", "off", "-alpha", "on", *clear_regions, "-bordercolor", "#c3c3c3", "-border", "1", "-fuzz", "20%", "-fill", "none", "-draw", "alpha 0,0 floodfill", "-shave", "1x1", "-trim", "+repage", "-bordercolor", "none", "-border", "4", str(output)]
         subprocess.run(command, check=True)
         outputs.append(str(output.relative_to(ASSETS)))
     preview = ASSETS / "office/generated/preview.png"

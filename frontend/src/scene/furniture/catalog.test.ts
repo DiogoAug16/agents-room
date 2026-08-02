@@ -26,8 +26,9 @@ describe("furniture catalog", () => {
   });
 
   it("transforms interaction points with the furniture instance", () => {
-    expect(furnitureInteractionPoints([{ id: "water-1", assetId: "water.dispenser.01", position: { x: 10, y: 20 }, orientation: "north_east", createdAt: "now" }])).toEqual([
+    expect(furnitureInteractionPoints([{ id: "water-1", assetId: "water.dispenser.01", position: { x: 10, y: 20 }, orientation: "north_east", createdAt: "now" }, { id: "coffee-1", assetId: "coffee.station.01", position: { x: 12, y: 20 }, orientation: "north_east", createdAt: "now" }])).toEqual([
       expect.objectContaining({ id: "furniture-water-1-water", gridPosition: { x: 10, y: 21 }, actionTypes: ["idle", "get_water"] }),
+      expect.objectContaining({ id: "furniture-coffee-1-coffee", gridPosition: { x: 12, y: 21 }, actionTypes: ["idle", "get_coffee"] }),
     ]);
   });
 
@@ -52,7 +53,7 @@ describe("furniture catalog", () => {
   });
 
   it("registers the expanded modular catalog with independent sofa seats", () => {
-    expect(FURNITURE_ASSETS.map((asset) => asset.id)).toEqual(expect.arrayContaining(["chair.office.blue.01", "sofa.light.01", "plant.floor.palm.01", "shelf.white.01", "desk.meeting.l.01", "recycling.station.01", "divider.glass.01", "divider.planter.01"]));
+    expect(FURNITURE_ASSETS.map((asset) => asset.id)).toEqual(expect.arrayContaining(["chair.office.blue.01", "sofa.light.01", "plant.floor.palm.01", "shelf.white.01", "desk.meeting.l.01", "recycling.station.01", "coffee.station.01", "divider.glass.01", "divider.planter.01"]));
     expect(furnitureSeats(FURNITURE_ASSETS.find((asset) => asset.id === "sofa.light.01")!)).toHaveLength(3);
   });
 

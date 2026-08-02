@@ -73,6 +73,10 @@ test("assigns a modular chair to the selected agent", async ({ page }) => {
 test("builds a grouped workstation for the selected agent", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Editar sala" }).click();
+  await page.getByRole("button", { name: "Limpar" }).click();
+  const clearDialog = page.getByRole("dialog");
+  await expect(clearDialog.getByRole("heading", { name: "Limpar escritório?" })).toBeVisible();
+  await clearDialog.getByRole("button", { name: "Limpar sala" }).click();
   await page.getByRole("button", { name: "Montar estação" }).click();
   const chair = page.getByLabel("Cadeira principal");
   await expect(chair.locator("option")).toHaveCount(2);
