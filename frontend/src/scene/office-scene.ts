@@ -101,6 +101,7 @@ export class OfficeScene extends Phaser.Scene {
     window.addEventListener("furniture:delete-request", this.deleteFurnitureRequest as EventListener);
     window.addEventListener("furniture:delete-force", this.deleteFurnitureForce as EventListener);
     window.addEventListener("furniture:focus-group", this.focusFurnitureGroup as EventListener);
+    window.addEventListener("scene:camera-control", this.cameraControl as EventListener);
     this.sync(new CustomEvent("agents", { detail: { agents: useSceneStore.getState().agents, editMode: useSceneStore.getState().editMode, furniture: useSceneStore.getState().furniture, agentSeatAssignments: useSceneStore.getState().agentSeatAssignments, selectedFurnitureIds: useSceneStore.getState().selectedFurnitureIds, highlightedFurnitureIds: useSceneStore.getState().selectedFurnitureIds, placingFurnitureAssetId: useSceneStore.getState().placingFurnitureAssetId, placingFurnitureOrientation: useSceneStore.getState().placingFurnitureOrientation } }));
     this.input.keyboard?.on("keydown-F", () => { if (this.editMode && this.highlightedFurnitureIds.size) { this.focusFurniture(this.highlightedFurnitureIds); return; } this.focusSelected(); });
     this.input.keyboard?.on("keydown-ESC", () => { if (this.placingFurnitureAssetId) window.dispatchEvent(new Event("furniture:cancel-placement")); else window.dispatchEvent(new Event("agent:deselect")); });
@@ -108,7 +109,7 @@ export class OfficeScene extends Phaser.Scene {
     if (import.meta.env.DEV) this.input.keyboard?.on("keydown-N", () => this.toggleNavigationDebug());
   }
 
-  shutdown() { this.idleController.cancelAll(); sceneEvents.removeEventListener("agents", this.sync as EventListener); sceneEvents.removeEventListener("interaction", this.interact as EventListener); window.removeEventListener("furniture:rotate-request", this.rotateFurnitureRequest as EventListener); window.removeEventListener("furniture:duplicate-request", this.duplicateFurnitureRequest as EventListener); window.removeEventListener("furniture:delete-request", this.deleteFurnitureRequest as EventListener); window.removeEventListener("furniture:delete-force", this.deleteFurnitureForce as EventListener); window.removeEventListener("furniture:focus-group", this.focusFurnitureGroup as EventListener); }
+  shutdown() { this.idleController.cancelAll(); sceneEvents.removeEventListener("agents", this.sync as EventListener); sceneEvents.removeEventListener("interaction", this.interact as EventListener); window.removeEventListener("furniture:rotate-request", this.rotateFurnitureRequest as EventListener); window.removeEventListener("furniture:duplicate-request", this.duplicateFurnitureRequest as EventListener); window.removeEventListener("furniture:delete-request", this.deleteFurnitureRequest as EventListener); window.removeEventListener("furniture:delete-force", this.deleteFurnitureForce as EventListener); window.removeEventListener("furniture:focus-group", this.focusFurnitureGroup as EventListener); window.removeEventListener("scene:camera-control", this.cameraControl as EventListener); }
 
   private drawGrid() {
     const graphics = this.add.graphics().setDepth(-50).setAlpha(0.48).setVisible(false);
@@ -693,6 +694,13 @@ export class OfficeScene extends Phaser.Scene {
     const selected = [...this.agents.values()].find(({ data }) => data.id === (window as Window & { selectedAgentId?: string }).selectedAgentId);
     if (selected) this.cameras.main.pan(selected.body.x, selected.body.y, 250, "Sine.easeInOut");
   }
+
+  private cameraControl = (event: Event) => {
+    const action = (event as CustomEvent<"zoom-in" | "zoom-out" | "focus">).detail;
+    if (action === "focus") { this.focusSelected(); return; }
+    const delta = action === "zoom-in" ? 0.1 : -0.1;
+    this.cameras.main.setZoom(Phaser.Math.Clamp(this.cameras.main.zoom + delta, 0.55, 1.15));
+  };
 
   private toggleNavigationDebug() { this.debugEnabled = !this.debugEnabled; this.renderNavigationDebug(); }
   private renderNavigationDebug() {
