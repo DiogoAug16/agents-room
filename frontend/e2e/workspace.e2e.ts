@@ -178,6 +178,18 @@ test("builds a modular break area", async ({ page }) => {
   await expect(page.getByLabel("Inspector do grupo")).toContainText("Pausa");
 });
 
+test("builds a sector partition", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Editar sala" }).click();
+  await page.getByRole("button", { name: "Limpar" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Limpar sala" }).click();
+  await page.getByRole("button", { name: "Montar divisória" }).click();
+  await expect(page.getByRole("button", { name: /Divisória de vidro.*1 na sala/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Jardineira divisória.*1 na sala/ })).toBeVisible();
+  await expect(page.getByText("Divisória setorial criada.")).toBeVisible();
+  await expect(page.getByLabel("Inspector do grupo")).toContainText("Setor");
+});
+
 test("opens the development asset calibration editor", async ({ page }) => {
   await page.goto("/dev/asset-editor");
   await expect(page.getByRole("heading", { name: "Cadeira executiva" })).toBeVisible();

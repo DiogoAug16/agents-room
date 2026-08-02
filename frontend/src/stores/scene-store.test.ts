@@ -220,4 +220,12 @@ describe("furniture editor history", () => {
     expect(furniture.map((item) => item.assetId)).toEqual(["coffee.station.01", "water.dispenser.01", "plant.floor.monstera.01"]);
     expect(furnitureGroups[0]).toMatchObject({ name: "Área de pausa", groupType: "break_area", instanceIds: furniture.map((item) => item.id) });
   });
+
+  it("creates a sector partition with glass and planter dividers", () => {
+    const store = useSceneStore.getState();
+    expect(store.createPartitionPreset()).toBe(true);
+    const { furniture, furnitureGroups } = useSceneStore.getState();
+    expect(furniture.map((item) => item.assetId)).toEqual(["divider.glass.01", "divider.planter.01"]);
+    expect(furnitureGroups[0]).toMatchObject({ name: "Divisória setorial", groupType: "partition", instanceIds: furniture.map((item) => item.id) });
+  });
 });

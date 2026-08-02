@@ -60,6 +60,7 @@ type SceneStore = {
   createLoungePreset: () => boolean;
   createMeetingPreset: () => boolean;
   createBreakAreaPreset: () => boolean;
+  createPartitionPreset: () => boolean;
   clearFurniture: () => void;
   restoreDefaultFurniture: () => boolean;
   undoFurniture: () => void;
@@ -259,6 +260,25 @@ export const useSceneStore = create<SceneStore>((set) => ({
         if (!cells.every(isInsideEmptyRoomFloor) || cells.some((cell) => occupied.has(`${cell.x},${cell.y}`))) continue;
         created = true;
         return { furniture: [...state.furniture, ...additions], furnitureGroups: [...state.furnitureGroups, { id: groupId, name: "Área de pausa", instanceIds: additions.map((item) => item.id), groupType: "break_area" }], selectedFurnitureId: coffeeId, selectedFurnitureIds: [coffeeId], furniturePast: [...state.furniturePast, snapshot(state)], furnitureFuture: [] };
+      }
+      return state;
+    });
+    return created;
+  },
+  createPartitionPreset: () => {
+    let created = false;
+    set((state) => {
+      const occupied = furnitureCells(state.furniture);
+      for (const position of [{ x: 24, y: 18 }, { x: 15, y: 28 }, { x: 6, y: 25 }]) {
+        const groupId = crypto.randomUUID(), glassId = crypto.randomUUID(), now = new Date().toISOString();
+        const additions: FurnitureInstance[] = [
+          { id: glassId, assetId: "divider.glass.01", position, orientation: "north_east", createdAt: now, groupId },
+          { id: crypto.randomUUID(), assetId: "divider.planter.01", position: { x: position.x, y: position.y + 2 }, orientation: "north_east", createdAt: now, groupId },
+        ];
+        const cells = additions.flatMap((item) => furnitureAsset(item.assetId)!.footprint.map((offset) => ({ x: item.position.x + offset.x, y: item.position.y + offset.y })));
+        if (!cells.every(isInsideEmptyRoomFloor) || cells.some((cell) => occupied.has(`${cell.x},${cell.y}`))) continue;
+        created = true;
+        return { furniture: [...state.furniture, ...additions], furnitureGroups: [...state.furnitureGroups, { id: groupId, name: "Divisória setorial", instanceIds: additions.map((item) => item.id), groupType: "partition" }], selectedFurnitureId: glassId, selectedFurnitureIds: [glassId], furniturePast: [...state.furniturePast, snapshot(state)], furnitureFuture: [] };
       }
       return state;
     });
