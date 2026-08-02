@@ -153,6 +153,8 @@ test("builds a modular meeting area", async ({ page }) => {
   await expect(page.getByRole("button", { name: /Cadeira executiva.*1 na sala/ })).toBeVisible();
   await expect(page.getByText("Área de reunião com dois assentos criada.")).toBeVisible();
   await expect(page.getByLabel("Inspector do grupo")).toContainText("Reunião");
+  await page.getByRole("button", { name: "Rotacionar" }).click();
+  await expect(page.getByLabel("Inspector do móvel")).toContainText("south_east");
 });
 
 test("rotates a glass divider using a supplied orientation", async ({ page }) => {
