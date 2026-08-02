@@ -29,6 +29,7 @@ export class OfficeScene extends Phaser.Scene {
   private gridGraphics?: Phaser.GameObjects.Graphics;
   private stationPreview?: Phaser.GameObjects.Graphics;
   private selectionGraphics?: Phaser.GameObjects.Graphics;
+  private focusGraphics?: Phaser.GameObjects.Graphics;
   private stationDrag?: string;
   private furnitureDrag?: string;
   private placingFurnitureAssetId?: string;
@@ -383,10 +384,26 @@ export class OfficeScene extends Phaser.Scene {
   };
 
   private focusFurniture(ids: Iterable<string>) {
-    const center = furnitureGroupCenter(this.furnitureItems, ids);
+    const focusedIds = [...ids];
+    const center = furnitureGroupCenter(this.furnitureItems, focusedIds);
     if (!center) return;
     const point = gridToScreen(center);
     this.cameras.main.pan(point.x, point.y, 250, "Sine.easeInOut");
+    this.showFurnitureFocus(focusedIds);
+  }
+
+  private showFurnitureFocus(ids: string[]) {
+    if (!this.focusGraphics) this.focusGraphics = this.add.graphics().setDepth(99_996);
+    const graphics = this.focusGraphics;
+    this.tweens.killTweensOf(graphics);
+    graphics.clear().setAlpha(1).setVisible(true).fillStyle(0x4cae9b, 0.24).lineStyle(3, 0x9ce5d8, 1);
+    const focused = new Set(ids);
+    this.furnitureItems.filter((item) => focused.has(item.id)).forEach((item) => furnitureAsset(item.assetId)?.footprint.forEach((offset) => {
+      const point = gridToScreen({ x: item.position.x + offset.x, y: item.position.y + offset.y });
+      const diamond = [new Phaser.Geom.Point(point.x, point.y - TILE_HEIGHT / 2), new Phaser.Geom.Point(point.x + TILE_WIDTH / 2, point.y), new Phaser.Geom.Point(point.x, point.y + TILE_HEIGHT / 2), new Phaser.Geom.Point(point.x - TILE_WIDTH / 2, point.y), new Phaser.Geom.Point(point.x, point.y - TILE_HEIGHT / 2)];
+      graphics.fillPoints(diamond, true).strokePoints(diamond);
+    }));
+    this.tweens.add({ targets: graphics, alpha: 0, duration: 850, ease: "Sine.out", onComplete: () => graphics.clear().setAlpha(1).setVisible(false) });
   }
 
   private furnitureScreenPosition(item: FurnitureInstance, delta = { x: 0, y: 0 }) {
